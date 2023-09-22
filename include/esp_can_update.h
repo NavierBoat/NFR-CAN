@@ -85,7 +85,7 @@ private:
                     received_md5_ = true;
                 }
             }
-            if (!update_started_ && message_type_ == MessageType::kUpdateStart)
+            else if (!update_started_ && message_type_ == MessageType::kUpdateStart)
             {
                 if (!Update.begin(update_length_))
                 {
