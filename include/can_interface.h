@@ -101,24 +101,48 @@ public:
 };
 
 template <class T>
-constexpr typename std::enable_if<std::is_unsigned<T>::value, T>::type bswap(T i, T j = 0u, std::size_t n = 0u)
+constexpr T bswap(T i, uint8_t n_bytes = 8, T j = 0)
 {
-    return n == sizeof(T) ? j : bswap<T>(i >> 8, (j << 8) | (i & (T)(unsigned char)(-1)), n + 1);
+    return n_bytes == 0
+               ? j
+               : bswap<T>(i >> 8,
+                          n_bytes - 1,
+                          j << 8 | ((i << (8 * (n_bytes - 1)) >> (8 * (n_bytes - 1))) & (T)(unsigned char)(-1)));
 }
 
-constexpr uint8_t CANSignal_generate_position(uint8_t position, uint8_t length, ICANSignal::ByteOrder byte_order)
+enum class BigEndianPositionType : uint8_t
+{
+    kKvaser,
+    kDbc
+};
+
+constexpr uint8_t CANSignal_generate_position(
+    uint8_t position,
+    uint8_t length,
+    ICANSignal::ByteOrder byte_order,
+    BigEndianPositionType position_type =
+        BigEndianPositionType::kKvaser)  // default to kvaser for backwards compatibility
 {
     return static_cast<uint8_t>(
-        (byte_order == ICANSignal::ByteOrder::kLittleEndian
-         || (length - (8 - (position % 8)) /* bits_in_last_byte */ < 0))
+        (byte_order == ICANSignal::ByteOrder::kLittleEndian)
             ? position
-            : position
-                  - ((8
-                      * (((length - (8 - (position % 8)) /* bits_in_last_byte */) % 8) /* remaining_bits */ == 0
-                             ? ((length - (8 - (position % 8)) /* bits_in_last_byte */) / 8) /* full_bytes */
-                             : ((length - (8 - (position % 8)) /* bits_in_last_byte */) / 8) /* full_bytes */ + 1))
-                     + (8 - ((length - (8 - (position % 8)) /* bits_in_last_byte */) % 8) /* remaining_bits */)
-                     - (8 - (position % 8)) /* bits_in_last_byte */));
+            : position_type == BigEndianPositionType::kDbc
+                  ? (position - std::min(length, static_cast<uint8_t>(position % 8)))
+                  : (length - (8 - (position % 8)) /* bits_in_last_byte */ < 0)
+                        ? position
+                        : position
+                              - ((8
+                                  * (((length - (8 - (position % 8)) /* bits_in_last_byte */) % 8) /* remaining_bits */
+                                             == 0
+                                         ? ((length - (8 - (position % 8)) /* bits_in_last_byte */)
+                                            / 8) /* full_bytes */
+                                         : ((length - (8 - (position % 8)) /* bits_in_last_byte */)
+                                            / 8) /* full_bytes */
+                                               + 1))
+                                 + (8
+                                    - ((length - (8 - (position % 8)) /* bits_in_last_byte */)
+                                       % 8) /* remaining_bits */)
+                                 - (8 - (position % 8)) /* bits_in_last_byte */));
     /*
         if (byte_order == ICANSignal::ByteOrder::kLittleEndian)
         {
@@ -149,7 +173,7 @@ constexpr uint64_t CANSignal_generate_mask(uint8_t position, uint8_t length, ICA
 {
     return (byte_order == ICANSignal::ByteOrder::kLittleEndian)
                ? (0xFFFFFFFFFFFFFFFFull << (64 - length) >> (64 - (length + position)))
-               : (bswap((uint64_t)(0xFFFFFFFFFFFFFFFFull >> (64 - length) << (64 - (length + position)))));
+               : (bswap((uint64_t)(0xFFFFFFFFFFFFFFFFull >> (64 - length) << (64 - (length + position))), length));
 }
 
 template <typename SignalType>
@@ -250,8 +274,10 @@ template <typename SignalType,
           int offset,
           bool signed_raw = false,
           ICANSignal::ByteOrder byte_order = ICANSignal::ByteOrder::kLittleEndian,
-          uint8_t position = CANSignal_generate_position(input_position, length, byte_order),
-          uint64_t mask = CANSignal_generate_mask(position, length, byte_order),
+          BigEndianPositionType position_type = BigEndianPositionType::kKvaser,
+          uint8_t message_length = 8,
+          uint8_t position = CANSignal_generate_position(input_position, length, byte_order, position_type),
+          uint64_t mask = CANSignal_generate_mask(position, message_length, byte_order),
           bool unity_factor = factor == CANTemplateConvertFloat(1)
                               && offset == 0>  // unity_factor is used for increased precision on unity-factor 64-bit
                                                // signals by getting rid of floating point error
@@ -404,6 +430,26 @@ private:
               CANTemplateConvertFloat(offset),                                              \
               true,                                                                         \
               byte_order>
+#define MakeDbcEndianUnsignedCANSignal(SignalType, position, length, factor, offset, byte_order, message_length) \
+    CANSignal<SignalType,                                                                                        \
+              position,                                                                                          \
+              length,                                                                                            \
+              CANTemplateConvertFloat(factor),                                                                   \
+              CANTemplateConvertFloat(offset),                                                                   \
+              false,                                                                                             \
+              byte_order,                                                                                        \
+              BigEndianPositionType::kDbc,                                                                       \
+              message_length>
+#define MakeDbcEndianSignedCANSignal(SignalType, position, length, factor, offset, byte_order, message_length) \
+    CANSignal<SignalType,                                                                                      \
+              position,                                                                                        \
+              length,                                                                                          \
+              CANTemplateConvertFloat(factor),                                                                 \
+              CANTemplateConvertFloat(offset),                                                                 \
+              true,                                                                                            \
+              byte_order,                                                                                      \
+              BigEndianPositionType::kDbc,                                                                     \
+              message_length>
 #define MakeUnsignedCANSignal(SignalType, position, length, factor, offset) \
     MakeEndianUnsignedCANSignal(SignalType, position, length, factor, offset, ICANSignal::ByteOrder::kLittleEndian)
 #define MakeSignedCANSignal(SignalType, position, length, factor, offset) \
@@ -483,25 +529,25 @@ public:
     bool always_active_{false};
 };
 
-template <size_t num_signals>
+template <size_t num_signals, typename MultiplexorType = uint64_t>
 class MultiplexedSignalGroup : public std::array<ICANSignal *, num_signals>, public IMultiplexedSignalGroup
 {
 public:
     template <typename... Ts>
-    MultiplexedSignalGroup(uint64_t multiplexor_value, Ts &... signals)
+    MultiplexedSignalGroup(MultiplexorType multiplexor_value, Ts &... signals)
         : std::array<ICANSignal *, num_signals>{&signals...}
     {
         static_assert(sizeof...(signals) == num_signals, "Wrong number of signals passed into SignalGroup.");
-        multiplexor_value_ = multiplexor_value;
+        multiplexor_value_ = static_cast<uint64_t>(multiplexor_value);
         always_active_ = false;
     }
 
     template <typename... Ts>
-    MultiplexedSignalGroup(bool always_active, uint64_t multiplexor_value, Ts &... signals)
+    MultiplexedSignalGroup(bool always_active, MultiplexorType multiplexor_value, Ts &... signals)
         : std::array<ICANSignal *, num_signals>{&signals...}
     {
         static_assert(sizeof...(signals) == num_signals, "Wrong number of signals passed into SignalGroup.");
-        multiplexor_value_ = multiplexor_value;
+        multiplexor_value_ = static_cast<uint64_t>(multiplexor_value);
         always_active_ = always_active;
     }
 
@@ -833,7 +879,8 @@ private:
         size_t index = 0xFFFFFFFFul;  // init to invalid value
         for (size_t i = 0; i < num_groups; i++)
         {
-            if (static_cast<uint64_t>(multiplexor_value) == signal_groups_.at(i)->multiplexor_value_)
+            if (static_cast<uint64_t>(multiplexor_value)
+                == static_cast<uint64_t>(signal_groups_.at(i)->multiplexor_value_))
             {
                 index = i;
                 break;
@@ -1146,7 +1193,8 @@ public:
         for (size_t i = 0; i < num_groups; i++)
         {
             MultiplexorType multiplexor_value = *multiplexor_;
-            if (static_cast<uint64_t>(multiplexor_value) == signal_groups_.at(i)->multiplexor_value_)
+            if (static_cast<uint64_t>(multiplexor_value)
+                == static_cast<uint64_t>(signal_groups_.at(i)->multiplexor_value_))
             {
                 multiplexor_index = i;
                 break;
