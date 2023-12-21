@@ -173,7 +173,7 @@ constexpr uint64_t CANSignal_generate_mask(uint8_t position, uint8_t length, ICA
 {
     return (byte_order == ICANSignal::ByteOrder::kLittleEndian)
                ? (0xFFFFFFFFFFFFFFFFull << (64 - length) >> (64 - (length + position)))
-               : (bswap((uint64_t)(0xFFFFFFFFFFFFFFFFull >> (64 - length) << (64 - (length + position))), length));
+               : (bswap((uint64_t)(0xFFFFFFFFFFFFFFFFull >> (64 - length) << (64 - (length + position))), 8));
 }
 
 template <typename SignalType>
@@ -277,7 +277,7 @@ template <typename SignalType,
           BigEndianPositionType position_type = BigEndianPositionType::kKvaser,
           uint8_t message_length = 8,
           uint8_t position = CANSignal_generate_position(input_position, length, byte_order, position_type),
-          uint64_t mask = CANSignal_generate_mask(position, message_length, byte_order),
+          uint64_t mask = CANSignal_generate_mask(position, length, byte_order),
           bool unity_factor = factor == CANTemplateConvertFloat(1)
                               && offset == 0>  // unity_factor is used for increased precision on unity-factor 64-bit
                                                // signals by getting rid of floating point error
