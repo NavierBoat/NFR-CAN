@@ -369,8 +369,6 @@ public:
             uint8_t temp_buffer[8]{0};
             void *temp_buffer_ptr{temp_buffer};
             *reinterpret_cast<underlying_type *>(temp_buffer_ptr) = *buffer & mask;
-            printf("%lx & %lx -> %lx\n", *buffer, mask, *reinterpret_cast<uint64_t *>(temp_buffer_ptr));
-
             std::reverse(std::begin(temp_buffer), std::end(temp_buffer));
             this->signal_ = static_cast<SignalType>((*reinterpret_cast<underlying_type *>(temp_buffer_ptr)) << position
                                                     >> (64 - length));
