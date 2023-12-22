@@ -127,8 +127,10 @@ constexpr uint8_t CANSignal_generate_position(
         (byte_order == ICANSignal::ByteOrder::kLittleEndian)
             ? position
             : position_type == BigEndianPositionType::kDbc
-                  ? (position - std::min(length, static_cast<uint8_t>(position % 8)))
-                  : (length - (8 - (position % 8)) /* bits_in_last_byte */ < 0)
+                  ? (length - (position % 8) < 0
+                         ? position
+                         : (position - std::min(static_cast<uint8_t>(length - 1), static_cast<uint8_t>(position % 8))))
+                  : (length - (8 - (position % 8)) /* bits_in_last_byte */ <= 0)
                         ? position
                         : position
                               - ((8
@@ -151,7 +153,7 @@ constexpr uint8_t CANSignal_generate_position(
         else
         {
             uint8_t bits_in_last_byte{8 - (position % 8)};
-            if (length - bits_in_last_byte < 0)
+            if (length - bits_in_last_byte <= 0)
             {
                 return position;
             }
@@ -169,7 +171,10 @@ constexpr uint8_t CANSignal_generate_position(
 }
 
 // Generates a mask of which bits in the message correspond to a specific signal
-constexpr uint64_t CANSignal_generate_mask(uint8_t position, uint8_t length, ICANSignal::ByteOrder byte_order)
+constexpr uint64_t CANSignal_generate_mask(uint8_t position,
+                                           uint8_t length,
+                                           ICANSignal::ByteOrder byte_order,
+                                           uint8_t message_length ALLOW_UNUSED)
 {
     return (byte_order == ICANSignal::ByteOrder::kLittleEndian)
                ? (0xFFFFFFFFFFFFFFFFull << (64 - length) >> (64 - (length + position)))
@@ -277,7 +282,7 @@ template <typename SignalType,
           BigEndianPositionType position_type = BigEndianPositionType::kKvaser,
           uint8_t message_length = 8,
           uint8_t position = CANSignal_generate_position(input_position, length, byte_order, position_type),
-          uint64_t mask = CANSignal_generate_mask(position, length, byte_order),
+          uint64_t mask = CANSignal_generate_mask(position, length, byte_order, message_length),
           bool unity_factor = factor == CANTemplateConvertFloat(1)
                               && offset == 0>  // unity_factor is used for increased precision on unity-factor 64-bit
                                                // signals by getting rid of floating point error
@@ -364,6 +369,8 @@ public:
             uint8_t temp_buffer[8]{0};
             void *temp_buffer_ptr{temp_buffer};
             *reinterpret_cast<underlying_type *>(temp_buffer_ptr) = *buffer & mask;
+            printf("%lx & %lx -> %lx\n", *buffer, mask, *reinterpret_cast<uint64_t *>(temp_buffer_ptr));
+
             std::reverse(std::begin(temp_buffer), std::end(temp_buffer));
             this->signal_ = static_cast<SignalType>((*reinterpret_cast<underlying_type *>(temp_buffer_ptr)) << position
                                                     >> (64 - length));
