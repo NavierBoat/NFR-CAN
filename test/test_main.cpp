@@ -123,11 +123,13 @@ void EnumClassSignalTest(void)
 void MITMotorBigEndianCANSignalTest(void)
 {
     // testing for position working with non-byte-aligned big-endian signals
-    MakeEndianUnsignedCANSignal(uint16_t, 8, 16, 1, 0, ICANSignal::ByteOrder::kBigEndian) p_des;
-    MakeEndianUnsignedCANSignal(uint16_t, 28, 12, 1, 0, ICANSignal::ByteOrder::kBigEndian) v_des;
-    MakeEndianUnsignedCANSignal(uint16_t, 32, 12, 1, 0, ICANSignal::ByteOrder::kBigEndian) kp;
-    MakeEndianUnsignedCANSignal(uint16_t, 52, 12, 1, 0, ICANSignal::ByteOrder::kBigEndian) kd;
-    MakeEndianUnsignedCANSignal(uint16_t, 56, 12, 1, 0, ICANSignal::ByteOrder::kBigEndian) torque;
+    MakeEndianUnsignedCANSignal(uint16_t, 8, 16, 1, 0, ICANSignal::ByteOrder::kBigEndian) p_des;   // 0x000000000000ffff
+    MakeEndianUnsignedCANSignal(uint16_t, 28, 12, 1, 0, ICANSignal::ByteOrder::kBigEndian) v_des;  // 0x00000000f0ff0000
+    MakeEndianUnsignedCANSignal(uint16_t, 32, 4, 1, 0, ICANSignal::ByteOrder::kBigEndian)
+        kp;  // 0x0000000f00000000//0x000000ff0f000000
+    MakeEndianUnsignedCANSignal(uint16_t, 52, 12, 1, 0, ICANSignal::ByteOrder::kBigEndian) kd;  // 0x00f0ff0000000000
+    MakeEndianUnsignedCANSignal(uint16_t, 56, 12, 1, 0, ICANSignal::ByteOrder::kBigEndian)
+        torque;  // 0xff0f000000000000
 
     uint8_t msg[8];
     uint64_t* full_msg = reinterpret_cast<uint64_t*>(msg);
@@ -135,7 +137,7 @@ void MITMotorBigEndianCANSignalTest(void)
 
     p_des = 0x8005;
     v_des = 0x800;
-    kp = 0;
+    kp = 5;
     kd = 0xFFF;
     torque = 0x800;
     p_des.EncodeSignal(full_msg);
@@ -150,7 +152,7 @@ void MITMotorBigEndianCANSignalTest(void)
     std::cout << std::endl;
     // printf("%d\n", msg[0]);
 
-    TEST_ASSERT_EQUAL(bswap(uint64_t(0x8005800000fff800)), *full_msg);
+    TEST_ASSERT_EQUAL_HEX64(bswap(uint64_t(0x8005800005fff800)), *full_msg);
 }
 
 void OperatorsTest(void)
@@ -188,7 +190,8 @@ void MultiplexedCANMessageTest(void)
 
     MockCAN can{};
 
-    MultiplexedCANTXMessage<2, uint8_t> tx_msg{can, 100, 8, 100, tx_multiplexor, tx_signals_0, tx_signals_1};
+    MultiplexedCANTXMessage<2, 2, uint8_t> tx_msg{
+        can, 100, 8, 100, std::array<uint8_t, 2>{0, 1}, tx_multiplexor, tx_signals_0, tx_signals_1};
     MultiplexedCANRXMessage<2, uint8_t> rx_msg{
         can, 100, []() { return 0; }, rx_multiplexor, rx_signals_0, rx_signals_1};
 
@@ -224,6 +227,60 @@ void MultiplexedCANMessageTest(void)
     TEST_ASSERT(tx_multiplexor == 0);
 }
 
+void IVTBigEndianCanSignalTest(void)
+{
+    // testing for position working with non-byte-aligned big-endian signals
+    MakeDbcEndianUnsignedCANSignal(bool, 15, 1, 1, 0, ICANSignal::ByteOrder::kBigEndian, 6) System_Error;       //
+    MakeDbcEndianUnsignedCANSignal(bool, 12, 1, 1, 0, ICANSignal::ByteOrder::kBigEndian, 6) OCS;                //
+    MakeDbcEndianUnsignedCANSignal(bool, 14, 1, 1, 0, ICANSignal::ByteOrder::kBigEndian, 6) Measurement_Error;  //
+    MakeDbcEndianUnsignedCANSignal(bool, 13, 1, 1, 0, ICANSignal::ByteOrder::kBigEndian, 6) Channel_Error;      //
+    MakeDbcEndianUnsignedCANSignal(uint8_t, 7, 8, 1, 0, ICANSignal::ByteOrder::kBigEndian, 6) ID_Result;        //
+    MakeDbcEndianUnsignedCANSignal(uint8_t, 11, 4, 1, 0, ICANSignal::ByteOrder::kBigEndian, 6) MsgCount;        //
+    MakeDbcEndianUnsignedCANSignal(uint32_t, 23, 32, 1, 0, ICANSignal::ByteOrder::kBigEndian, 6) Result;        //
+
+    uint8_t msg[8];
+    uint64_t* full_msg = reinterpret_cast<uint64_t*>(msg);
+    *full_msg = 0;
+
+    ID_Result = 0xA5;
+    MsgCount = 0xC;
+    OCS = 0b1;
+    Channel_Error = 0b1;
+    Measurement_Error = 0b0;
+    System_Error = 0b0;
+    Result = 0xF7F7B5B5;
+
+    ID_Result.EncodeSignal(full_msg);
+    MsgCount.EncodeSignal(full_msg);
+    OCS.EncodeSignal(full_msg);
+    Channel_Error.EncodeSignal(full_msg);
+    Measurement_Error.EncodeSignal(full_msg);
+    System_Error.EncodeSignal(full_msg);
+    Result.EncodeSignal(full_msg);
+
+    // std::cout << std::hex << *full_msg << std::endl;
+
+    for (int i = 0; i < 8; i++) std::cout << std::hex << std::setfill('0') << std::setw(2) << uint16_t(msg[i]) << " ";
+    std::cout << std::endl;
+    // printf("%d\n", msg[0]);
+
+    TEST_ASSERT_EQUAL_HEX64(bswap(uint64_t(0xA53CF7F7B5B50000)), *full_msg);
+    ID_Result.DecodeSignal(full_msg);
+    MsgCount.DecodeSignal(full_msg);
+    OCS.DecodeSignal(full_msg);
+    Channel_Error.DecodeSignal(full_msg);
+    Measurement_Error.DecodeSignal(full_msg);
+    System_Error.DecodeSignal(full_msg);
+    Result.DecodeSignal(full_msg);
+    TEST_ASSERT_EQUAL_HEX8(0xA5, ID_Result.value_ref());
+    TEST_ASSERT_EQUAL_HEX8(0xC, MsgCount.value_ref());
+    TEST_ASSERT_EQUAL_HEX8(0b1, OCS.value_ref());
+    TEST_ASSERT_EQUAL_HEX8(0b1, Channel_Error.value_ref());
+    TEST_ASSERT_EQUAL_HEX8(0b0, Measurement_Error.value_ref());
+    TEST_ASSERT_EQUAL_HEX8(0b0, System_Error.value_ref());
+    TEST_ASSERT_EQUAL_HEX32(0xF7F7B5B5, Result.value_ref());
+}
+
 int runUnityTests(void)
 {
     UNITY_BEGIN();
@@ -236,6 +293,7 @@ int runUnityTests(void)
     RUN_TEST(MITMotorBigEndianCANSignalTest);
     RUN_TEST(OperatorsTest);
     RUN_TEST(MultiplexedCANMessageTest);
+    RUN_TEST(IVTBigEndianCanSignalTest);
     return UNITY_END();
 }
 

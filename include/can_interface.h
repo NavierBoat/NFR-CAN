@@ -116,6 +116,7 @@ enum class BigEndianPositionType : uint8_t
     kDbc
 };
 
+// TODO: position is not correctly generated for Kvaser in some cases
 constexpr uint8_t CANSignal_generate_position(
     uint8_t position,
     uint8_t length,
@@ -127,11 +128,10 @@ constexpr uint8_t CANSignal_generate_position(
         (byte_order == ICANSignal::ByteOrder::kLittleEndian)
             ? position
             : position_type == BigEndianPositionType::kDbc
-                  ? (length - (position % 8) < 0
-                         ? position
-                         : (position - std::min(static_cast<uint8_t>(length - 1), static_cast<uint8_t>(position % 8))))
+                  ? (position - (position % 8) /*bits in full bytes before*/)
+                        + (7 - (position % 8 /*bits in last byte*/))
                   : (length - (8 - (position % 8)) /* bits_in_last_byte */ <= 0)
-                        ? position
+                        ? (position + length) % 8 == 0 ? position + length - 8 : position + length
                         : position
                               - ((8
                                   * (((length - (8 - (position % 8)) /* bits_in_last_byte */) % 8) /* remaining_bits */
@@ -171,14 +171,11 @@ constexpr uint8_t CANSignal_generate_position(
 }
 
 // Generates a mask of which bits in the message correspond to a specific signal
-constexpr uint64_t CANSignal_generate_mask(uint8_t position,
-                                           uint8_t length,
-                                           ICANSignal::ByteOrder byte_order,
-                                           uint8_t message_length ALLOW_UNUSED)
+constexpr uint64_t CANSignal_generate_mask(uint8_t position, uint8_t length, ICANSignal::ByteOrder byte_order)
 {
-    return (byte_order == ICANSignal::ByteOrder::kLittleEndian)
+    return byte_order == ICANSignal::ByteOrder::kLittleEndian
                ? (0xFFFFFFFFFFFFFFFFull << (64 - length) >> (64 - (length + position)))
-               : (bswap((uint64_t)(0xFFFFFFFFFFFFFFFFull >> (64 - length) << (64 - (length + position))), 8));
+               : bswap(0xFFFFFFFFFFFFFFFFull >> (64 - length) << (64 - (length + position)));
 }
 
 template <typename SignalType>
@@ -282,7 +279,7 @@ template <typename SignalType,
           BigEndianPositionType position_type = BigEndianPositionType::kKvaser,
           uint8_t message_length = 8,
           uint8_t position = CANSignal_generate_position(input_position, length, byte_order, position_type),
-          uint64_t mask = CANSignal_generate_mask(position, length, byte_order, message_length),
+          uint64_t mask = CANSignal_generate_mask(position, length, byte_order),
           bool unity_factor = factor == CANTemplateConvertFloat(1)
                               && offset == 0>  // unity_factor is used for increased precision on unity-factor 64-bit
                                                // signals by getting rid of floating point error
@@ -321,9 +318,18 @@ public:
             void *temp_reversed_buffer_ptr{
                 temp_reversed_buffer};  // intermediate as void* to get rid of strict aliasing compiler warnings
             *reinterpret_cast<underlying_type *>(temp_reversed_buffer_ptr) |=
-                (static_cast<underlying_type>(signal) << (64 - (position + length)));
+                (static_cast<underlying_type>(signal) << (64 - (length + position)));
+            printf("p:%02d, l:%02d, m:%016lx, mr:%016lx, s:%lx, tb:%lx, ",
+                   position,
+                   length,
+                   mask,
+                   bswap(mask),
+                   static_cast<underlying_type>(signal),
+                   *reinterpret_cast<underlying_type *>(temp_reversed_buffer_ptr));
             std::reverse(std::begin(temp_reversed_buffer), std::end(temp_reversed_buffer));
+            printf("tbr:%lx, ", *reinterpret_cast<underlying_type *>(temp_reversed_buffer_ptr));
             *buffer |= *reinterpret_cast<underlying_type *>(temp_reversed_buffer_ptr) & mask;
+            printf("b:%lx\n", *buffer);
         }
     }
 
@@ -369,7 +375,15 @@ public:
             uint8_t temp_buffer[8]{0};
             void *temp_buffer_ptr{temp_buffer};
             *reinterpret_cast<underlying_type *>(temp_buffer_ptr) = *buffer & mask;
+            // printf("p:%02d, l:%02d, m:%016lx, mr:%016lx, b:%016lx -> %016lx\n",
+            //       position,
+            //       length,
+            //       mask,
+            //       bswap(mask),
+            //       *buffer,
+            //       *reinterpret_cast<underlying_type *>(temp_buffer_ptr));
             std::reverse(std::begin(temp_buffer), std::end(temp_buffer));
+
             this->signal_ = static_cast<SignalType>((*reinterpret_cast<underlying_type *>(temp_buffer_ptr)) << position
                                                     >> (64 - length));
         }
