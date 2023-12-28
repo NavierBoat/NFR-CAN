@@ -62,13 +62,13 @@ def dbc_to_h(dbc_file, h_file, get_millis):
                     signalString += fix_var_name_characters(str(name), "e") + " = " + str(value) + ",\n"
                 signalString += "};\n"
             if signal.byte_order == "big_endian":
-                byteOrder = "DbcEndian"
+                byteOrder = "Endian"
                 endian = ", ICANSignal::ByteOrder::kBigEndian"
             else:
                 byteOrder = ""
                 endian = ""
             signalType = "Signed" if signal.is_signed else "Unsigned"
-            signalString += "Make" + byteOrder + signalType + "CANSignal(" + (data_type if signal.choices == None else signal.name + "_Enum") + "," + str(signal.start) + "," + str(signal.length) + "," + str(signal.scale) + ("" if isinstance(signal.scale, int) else "f") + "," + str(signal.offset) + endian + ((", " + str(message.length)) if signal.byte_order == "big_endian" else "") + ") " + signal.name + "_Signal_{};\n"
+            signalString += "Make" + byteOrder + signalType + "CANSignal(" + (data_type if signal.choices == None else signal.name + "_Enum") + "," + str(signal.start) + "," + str(signal.length) + "," + str(signal.scale) + ("" if isinstance(signal.scale, int) else "f") + "," + str(signal.offset) + endian + ") " + signal.name + "_Signal_{};\n"
             print(signal.name, str(signal.start), str(signal.length))
             with open(h_file, 'a') as file:
                 file.write(signalString)
