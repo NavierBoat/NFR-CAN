@@ -120,7 +120,7 @@ enum class BigEndianPositionType : uint8_t
 constexpr uint8_t CANSignal_generate_position(uint8_t position,
                                               uint8_t length,
                                               ICANSignal::ByteOrder byte_order,
-                                              BigEndianPositionType position_type = BigEndianPositionType::kDbc)
+                                              BigEndianPositionType position_type)
 {
     return static_cast<uint8_t>(
         (byte_order == ICANSignal::ByteOrder::kLittleEndian)
@@ -274,7 +274,7 @@ template <typename SignalType,
           int offset,
           bool signed_raw = false,
           ICANSignal::ByteOrder byte_order = ICANSignal::ByteOrder::kLittleEndian,
-          BigEndianPositionType position_type = BigEndianPositionType::kKvaser,
+          BigEndianPositionType position_type = BigEndianPositionType::kDbc,
           uint8_t position = CANSignal_generate_position(input_position, length, byte_order, position_type),
           uint64_t mask = CANSignal_generate_mask(position, length, byte_order),
           bool unity_factor = factor == CANTemplateConvertFloat(1)

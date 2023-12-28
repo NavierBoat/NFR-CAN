@@ -76,7 +76,7 @@ void SignedCanSignalTest(void)
 void BigEndianCanSignalTest(void)
 {
     // CANSignal<uint16_t, 0, 16, CANTemplateConvertFloat(1), 0, false, ICANSignal::ByteOrder::kBigEndian> test_signal;
-    MakeEndianUnsignedCANSignal(uint16_t, 8, 16, 1, 0, ICANSignal::ByteOrder::kBigEndian) test_signal;
+    MakeKvaserEndianUnsignedCANSignal(uint16_t, 8, 16, 1, 0, ICANSignal::ByteOrder::kBigEndian) test_signal;
     test_signal = 0xFF00;
     uint64_t test_buf{0};
     test_signal.EncodeSignal(&test_buf);
@@ -123,12 +123,15 @@ void EnumClassSignalTest(void)
 void MITMotorBigEndianCANSignalTest(void)
 {
     // testing for position working with non-byte-aligned big-endian signals
-    MakeEndianUnsignedCANSignal(uint16_t, 8, 16, 1, 0, ICANSignal::ByteOrder::kBigEndian) p_des;   // 0x000000000000ffff
-    MakeEndianUnsignedCANSignal(uint16_t, 28, 12, 1, 0, ICANSignal::ByteOrder::kBigEndian) v_des;  // 0x00000000f0ff0000
-    MakeEndianUnsignedCANSignal(uint16_t, 32, 4, 1, 0, ICANSignal::ByteOrder::kBigEndian)
+    MakeKvaserEndianUnsignedCANSignal(uint16_t, 8, 16, 1, 0, ICANSignal::ByteOrder::kBigEndian)
+        p_des;  // 0x000000000000ffff
+    MakeKvaserEndianUnsignedCANSignal(uint16_t, 28, 12, 1, 0, ICANSignal::ByteOrder::kBigEndian)
+        v_des;  // 0x00000000f0ff0000
+    MakeKvaserEndianUnsignedCANSignal(uint16_t, 32, 4, 1, 0, ICANSignal::ByteOrder::kBigEndian)
         kp;  // 0x0000000f00000000//0x000000ff0f000000
-    MakeEndianUnsignedCANSignal(uint16_t, 52, 12, 1, 0, ICANSignal::ByteOrder::kBigEndian) kd;  // 0x00f0ff0000000000
-    MakeEndianUnsignedCANSignal(uint16_t, 56, 12, 1, 0, ICANSignal::ByteOrder::kBigEndian)
+    MakeKvaserEndianUnsignedCANSignal(uint16_t, 52, 12, 1, 0, ICANSignal::ByteOrder::kBigEndian)
+        kd;  // 0x00f0ff0000000000
+    MakeKvaserEndianUnsignedCANSignal(uint16_t, 56, 12, 1, 0, ICANSignal::ByteOrder::kBigEndian)
         torque;  // 0xff0f000000000000
 
     uint8_t msg[8];
@@ -230,13 +233,13 @@ void MultiplexedCANMessageTest(void)
 void IVTBigEndianCanSignalTest(void)
 {
     // testing for position working with non-byte-aligned big-endian signals
-    MakeDbcEndianUnsignedCANSignal(bool, 15, 1, 1, 0, ICANSignal::ByteOrder::kBigEndian, 6) System_Error;       //
-    MakeDbcEndianUnsignedCANSignal(bool, 12, 1, 1, 0, ICANSignal::ByteOrder::kBigEndian, 6) OCS;                //
-    MakeDbcEndianUnsignedCANSignal(bool, 14, 1, 1, 0, ICANSignal::ByteOrder::kBigEndian, 6) Measurement_Error;  //
-    MakeDbcEndianUnsignedCANSignal(bool, 13, 1, 1, 0, ICANSignal::ByteOrder::kBigEndian, 6) Channel_Error;      //
-    MakeDbcEndianUnsignedCANSignal(uint8_t, 7, 8, 1, 0, ICANSignal::ByteOrder::kBigEndian, 6) ID_Result;        //
-    MakeDbcEndianUnsignedCANSignal(uint8_t, 11, 4, 1, 0, ICANSignal::ByteOrder::kBigEndian, 6) MsgCount;        //
-    MakeDbcEndianUnsignedCANSignal(uint32_t, 23, 32, 1, 0, ICANSignal::ByteOrder::kBigEndian, 6) Result;        //
+    MakeEndianUnsignedCANSignal(bool, 15, 1, 1, 0, ICANSignal::ByteOrder::kBigEndian) System_Error;       //
+    MakeEndianUnsignedCANSignal(bool, 12, 1, 1, 0, ICANSignal::ByteOrder::kBigEndian) OCS;                //
+    MakeEndianUnsignedCANSignal(bool, 14, 1, 1, 0, ICANSignal::ByteOrder::kBigEndian) Measurement_Error;  //
+    MakeEndianUnsignedCANSignal(bool, 13, 1, 1, 0, ICANSignal::ByteOrder::kBigEndian) Channel_Error;      //
+    MakeEndianUnsignedCANSignal(uint8_t, 7, 8, 1, 0, ICANSignal::ByteOrder::kBigEndian) ID_Result;        //
+    MakeEndianUnsignedCANSignal(uint8_t, 11, 4, 1, 0, ICANSignal::ByteOrder::kBigEndian) MsgCount;        //
+    MakeEndianUnsignedCANSignal(uint32_t, 23, 32, 1, 0, ICANSignal::ByteOrder::kBigEndian) Result;        //
 
     uint8_t msg[8];
     uint64_t* full_msg = reinterpret_cast<uint64_t*>(msg);
