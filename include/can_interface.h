@@ -316,17 +316,8 @@ public:
                 temp_reversed_buffer};  // intermediate as void* to get rid of strict aliasing compiler warnings
             *reinterpret_cast<underlying_type *>(temp_reversed_buffer_ptr) |=
                 (static_cast<underlying_type>(signal) << (64 - (length + position)));
-            printf("p:%02d, l:%02d, m:%016lx, mr:%016lx, s:%lx, tb:%lx, ",
-                   position,
-                   length,
-                   mask,
-                   bswap(mask),
-                   static_cast<underlying_type>(signal),
-                   *reinterpret_cast<underlying_type *>(temp_reversed_buffer_ptr));
             std::reverse(std::begin(temp_reversed_buffer), std::end(temp_reversed_buffer));
-            printf("tbr:%lx, ", *reinterpret_cast<underlying_type *>(temp_reversed_buffer_ptr));
             *buffer |= *reinterpret_cast<underlying_type *>(temp_reversed_buffer_ptr) & mask;
-            printf("b:%lx\n", *buffer);
         }
     }
 
@@ -372,15 +363,7 @@ public:
             uint8_t temp_buffer[8]{0};
             void *temp_buffer_ptr{temp_buffer};
             *reinterpret_cast<underlying_type *>(temp_buffer_ptr) = *buffer & mask;
-            // printf("p:%02d, l:%02d, m:%016lx, mr:%016lx, b:%016lx -> %016lx\n",
-            //       position,
-            //       length,
-            //       mask,
-            //       bswap(mask),
-            //       *buffer,
-            //       *reinterpret_cast<underlying_type *>(temp_buffer_ptr));
             std::reverse(std::begin(temp_buffer), std::end(temp_buffer));
-
             this->signal_ = static_cast<SignalType>((*reinterpret_cast<underlying_type *>(temp_buffer_ptr)) << position
                                                     >> (64 - length));
         }
