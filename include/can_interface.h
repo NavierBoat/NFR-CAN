@@ -117,12 +117,10 @@ enum class BigEndianPositionType : uint8_t
 };
 
 // TODO: position is not correctly generated for Kvaser in some cases
-constexpr uint8_t CANSignal_generate_position(
-    uint8_t position,
-    uint8_t length,
-    ICANSignal::ByteOrder byte_order,
-    BigEndianPositionType position_type =
-        BigEndianPositionType::kKvaser)  // default to kvaser for backwards compatibility
+constexpr uint8_t CANSignal_generate_position(uint8_t position,
+                                              uint8_t length,
+                                              ICANSignal::ByteOrder byte_order,
+                                              BigEndianPositionType position_type = BigEndianPositionType::kDbc)
 {
     return static_cast<uint8_t>(
         (byte_order == ICANSignal::ByteOrder::kLittleEndian)
@@ -277,7 +275,6 @@ template <typename SignalType,
           bool signed_raw = false,
           ICANSignal::ByteOrder byte_order = ICANSignal::ByteOrder::kLittleEndian,
           BigEndianPositionType position_type = BigEndianPositionType::kKvaser,
-          uint8_t message_length = 8,
           uint8_t position = CANSignal_generate_position(input_position, length, byte_order, position_type),
           uint64_t mask = CANSignal_generate_mask(position, length, byte_order),
           bool unity_factor = factor == CANTemplateConvertFloat(1)
@@ -449,26 +446,24 @@ private:
               CANTemplateConvertFloat(offset),                                              \
               true,                                                                         \
               byte_order>
-#define MakeDbcEndianUnsignedCANSignal(SignalType, position, length, factor, offset, byte_order, message_length) \
-    CANSignal<SignalType,                                                                                        \
-              position,                                                                                          \
-              length,                                                                                            \
-              CANTemplateConvertFloat(factor),                                                                   \
-              CANTemplateConvertFloat(offset),                                                                   \
-              false,                                                                                             \
-              byte_order,                                                                                        \
-              BigEndianPositionType::kDbc,                                                                       \
-              message_length>
-#define MakeDbcEndianSignedCANSignal(SignalType, position, length, factor, offset, byte_order, message_length) \
-    CANSignal<SignalType,                                                                                      \
-              position,                                                                                        \
-              length,                                                                                          \
-              CANTemplateConvertFloat(factor),                                                                 \
-              CANTemplateConvertFloat(offset),                                                                 \
-              true,                                                                                            \
-              byte_order,                                                                                      \
-              BigEndianPositionType::kDbc,                                                                     \
-              message_length>
+#define MakeKvaserEndianUnsignedCANSignal(SignalType, position, length, factor, offset, byte_order) \
+    CANSignal<SignalType,                                                                           \
+              position,                                                                             \
+              length,                                                                               \
+              CANTemplateConvertFloat(factor),                                                      \
+              CANTemplateConvertFloat(offset),                                                      \
+              false,                                                                                \
+              byte_order,                                                                           \
+              BigEndianPositionType::kKvaser>
+#define MakeKvaserEndianSignedCANSignal(SignalType, position, length, factor, offset, byte_order) \
+    CANSignal<SignalType,                                                                         \
+              position,                                                                           \
+              length,                                                                             \
+              CANTemplateConvertFloat(factor),                                                    \
+              CANTemplateConvertFloat(offset),                                                    \
+              true,                                                                               \
+              byte_order,                                                                         \
+              BigEndianPositionType::kKvaser>
 #define MakeUnsignedCANSignal(SignalType, position, length, factor, offset) \
     MakeEndianUnsignedCANSignal(SignalType, position, length, factor, offset, ICANSignal::ByteOrder::kLittleEndian)
 #define MakeSignedCANSignal(SignalType, position, length, factor, offset) \
