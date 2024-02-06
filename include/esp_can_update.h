@@ -16,6 +16,7 @@ public:
         : kUpdateId{update_id}, can_interface_{can_bus}, timer_group_{timer_group}
     {
         update_progress_message_.Disable();
+        update_data_message_.SetMask(0x7FF);
         timer_group_.AddTimer(100, [this]() {
             if (update_data_message_.GetTimeSinceLastReceive() >= kUpdateTimeout)
             {
@@ -44,20 +45,18 @@ private:
     enum class MessageType : uint8_t
     {
         kUpdateStart = 0,
-        kUpdateData = 1,
-        kMd5 = 2
+        kMd5 = 1
     };
     MakeUnsignedCANSignal(MessageType, 0, 8, 1, 0) message_type_{};
     MakeUnsignedCANSignal(uint32_t, 8, 32, 1, 0) update_length_{};
     MakeUnsignedCANSignal(uint16_t, 8, 8, 1, 0) update_md5_idx_{};
     MakeUnsignedCANSignal(uint32_t, 16, 32, 1, 0) update_md5_{};
-    MakeUnsignedCANSignal(uint32_t, 8, 24, 1, 0) data_block_index_{};
-    MakeUnsignedCANSignal(uint32_t, 32, 32, 1, 0) update_data_{};
 
     MultiplexedSignalGroup<1, MessageType> length_signal_group_{MessageType::kUpdateStart, update_length_};
-    MultiplexedSignalGroup<2, MessageType> data_signal_group_{
-        MessageType::kUpdateData, data_block_index_, update_data_};
     MultiplexedSignalGroup<2, MessageType> md5_signal_group_{MessageType::kMd5, update_md5_idx_, update_md5_};
+
+    MakeUnsignedCANSignal(uint8_t, 0, 8, 1, 0) data_block_index_low_{};
+    MakeUnsignedCANSignal(uint64_t, 8, 56, 1, 0) update_data_{};
 
     MakeUnsignedCANSignal(uint32_t, 0, 24, 1, 0) update_block_idx_{};
     MakeUnsignedCANSignal(bool, 24, 1, 1, 0) received_len_{};
@@ -65,16 +64,16 @@ private:
     MakeUnsignedCANSignal(bool, 26, 1, 1, 0) written_{};
 
     CANTXMessage<4> update_progress_message_{
-        can_interface_, kUpdateId + 1, 4, 10, timer_group_, update_block_idx_, received_len_, received_md5_, written_};
+        can_interface_, kUpdateId + 2, 4, 10, timer_group_, update_block_idx_, received_len_, received_md5_, written_};
 
     bool update_started_ = false;
     std::array<bool, 4> received_md5_arr_ = {false, false, false, false};
     std::array<uint32_t, 4> md5_arr_{};
     char md5_cstr_[33];
 
-    MultiplexedCANRXMessage<3, MessageType> update_data_message_{
+    MultiplexedCANRXMessage<2, MessageType> update_info_message_{
         can_interface_,
-        kUpdateId,
+        kUpdateId + 1,
         [this]() {
             if (message_type_ == MessageType::kMd5)
             {
@@ -111,45 +110,50 @@ private:
                     update_progress_message_.Enable();
                 }
             }
-            else if (update_started_ && message_type_ == MessageType::kUpdateData)
-            {
-                uint32_t data = update_data_;
-                if (static_cast<uint32_t>(update_block_idx_) == data_block_index_)
-                {
-                    if (data_block_index_ * 4 >= update_length_ - 4)
-                    {
-                        Update.write(reinterpret_cast<uint8_t *>(&data), update_length_ - (data_block_index_ * 4));
-                        written_ = true;
-                        update_progress_message_.EncodeAndSend();
-
-                        if (Update.end())
-                        {
-                            Serial.println("Update success!");
-                            ESP.restart();
-                        }
-                        else
-                        {
-                            Update.printError(Serial);
-                            Serial.printf("Expected MD5: %s\n", md5_cstr_);
-                            update_started_ = false;
-                            update_progress_message_.Disable();
-                        }
-                    }
-                    else
-                    {
-                        Update.write(reinterpret_cast<uint8_t *>(&data), 4);
-                        written_ = true;
-                        update_progress_message_.EncodeAndSend();
-                        update_block_idx_ += 1;
-                        written_ = false;
-                        update_progress_message_.EncodeAndSend();
-                    }
-                }
-            }
         },
         message_type_,
         length_signal_group_,
-        data_signal_group_,
         md5_signal_group_};
+
+    CANRXMessage<2> update_data_message_{
+        can_interface_,
+        kUpdateId,
+        [this]() {
+            uint64_t data = update_data_;
+            uint32_t index = ((update_data_message_.GetID() & 0x1FFFF800) >> 3) + data_block_index_low_;
+            if (static_cast<uint32_t>(update_block_idx_) == index)
+            {
+                if (index * 7 >= update_length_ - 7)
+                {
+                    Update.write(reinterpret_cast<uint8_t *>(&data), update_length_ - (index * 7));
+                    written_ = true;
+                    update_progress_message_.EncodeAndSend();
+
+                    if (Update.end())
+                    {
+                        Serial.println("Update success!");
+                        ESP.restart();
+                    }
+                    else
+                    {
+                        Update.printError(Serial);
+                        Serial.printf("Expected MD5: %s\n", md5_cstr_);
+                        update_started_ = false;
+                        update_progress_message_.Disable();
+                    }
+                }
+                else
+                {
+                    Update.write(reinterpret_cast<uint8_t *>(&data), 7);
+                    written_ = true;
+                    update_progress_message_.EncodeAndSend();
+                    update_block_idx_ += 1;
+                    written_ = false;
+                    update_progress_message_.EncodeAndSend();
+                }
+            }
+        },
+        data_block_index_low_,
+        update_data_};
 };
 #endif

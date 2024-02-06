@@ -1062,10 +1062,11 @@ public:
 
     void DecodeSignals(CANMessage message)
     {
-        if (message.id_ != id_)
+        if (message.id_ & id_mask_ != id_ * id_mask_)
         {
             return;
         }
+        id_ = message.id_;
         raw_message_ = *reinterpret_cast<uint64_t *>(message.data_.data());
         for (uint8_t i = 0; i < num_signals; i++)
         {
@@ -1085,10 +1086,12 @@ public:
     uint64_t GetLastRawMessage() const { return raw_message_; }
     uint32_t GetLastReceiveTime() const { return last_receive_time_; }
     uint32_t GetTimeSinceLastReceive() const { return get_millis_() - last_receive_time_; }
+    void SetMask(uint32_t mask) { id_mask_ = mask; }
 
 private:
     ICAN &can_interface_;
     uint32_t id_;
+    uint32_t id_mask_{0};
     // A function to get the current time in millis on the current platform
     std::function<uint32_t(void)> get_millis_;
 

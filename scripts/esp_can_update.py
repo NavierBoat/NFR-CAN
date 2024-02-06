@@ -10,14 +10,15 @@ Import("env")
 try:
     import can
     import cantools
-    from tqdm import tqdm
+    from tqdm.auto import tqdm
 except ImportError:
     env.Execute("$PYTHONEXE -m pip install can")
     env.Execute("$PYTHONEXE -m pip install cantools")
     env.Execute("$PYTHONEXE -m pip install tqdm")
+    env.Execute("$PYTHONEXE -m pip install progressbar")
     import can
     import cantools
-    from tqdm import tqdm
+    from tqdm.auto import tqdm
 
 try:
     import configparser
@@ -41,8 +42,10 @@ def on_upload(source, target, env):
 
         data_message = db.get_message_by_name("update_data_message")
         data_message.frame_id = int(can_update_config.get("update_message_id"), 0)
+        info_message = db.get_message_by_name("update_info_message")
+        info_message.frame_id = data_message.frame_id + 1
         progress_message = db.get_message_by_name("update_progress_message")
-        progress_message.frame_id = data_message.frame_id + 1
+        progress_message.frame_id = data_message.frame_id + 2
 
         can_bus = can.interface.Bus(
             "can0",
@@ -61,9 +64,9 @@ def on_upload(source, target, env):
             )
 
         try:
-            data_message_data = data_message.encode(
+            info_message_data = info_message.encode(
                 {
-                    "message_type": 2,
+                    "message_type": 1,
                     "update_md5": md5[i * 4]
                     + (md5[(i * 4) + 1] << 8)
                     + (md5[(i * 4) + 2] << 16)
@@ -73,7 +76,7 @@ def on_upload(source, target, env):
             )
             can_bus.send(
                 can.Message(
-                    arbitration_id=data_message.frame_id, data=data_message_data
+                    arbitration_id=info_message.frame_id, data=info_message_data
                 )
             )
         except:
@@ -90,9 +93,9 @@ def on_upload(source, target, env):
         received_md5 = False
         while not received_md5:
             for i in range(4):
-                data_message_data = data_message.encode(
+                info_message_data = info_message.encode(
                     {
-                        "message_type": 2,
+                        "message_type": 1,
                         "update_md5": md5[i * 4]
                         + (md5[(i * 4) + 1] << 8)
                         + (md5[(i * 4) + 2] << 16)
@@ -102,7 +105,7 @@ def on_upload(source, target, env):
                 )
                 can_bus.send(
                     can.Message(
-                        arbitration_id=data_message.frame_id, data=data_message_data
+                        arbitration_id=info_message.frame_id, data=info_message_data
                     )
                 )
                 time.sleep(0.02)
@@ -116,7 +119,7 @@ def on_upload(source, target, env):
             while msg is not None:
                 msg = can_bus.recv(0.00001)
 
-        data_message_data = data_message.encode(
+        info_message_data = info_message.encode(
             {"message_type": 0, "update_length": len(firmware_bytes)}
         )
         received_len = False
@@ -124,7 +127,7 @@ def on_upload(source, target, env):
         while not received_len:
             can_bus.send(
                 can.Message(
-                    arbitration_id=data_message.frame_id, data=data_message_data
+                    arbitration_id=info_message.frame_id, data=info_message_data
                 )
             )
             time.sleep(0.01)
@@ -137,35 +140,44 @@ def on_upload(source, target, env):
                     received_len = True
             while msg is not None:
                 msg = can_bus.recv(0.00001)
-
+        tqdm._instances.clear()
         bar = tqdm(
             desc="Upload Progress",
             total=len(firmware_bytes),
-            dynamic_ncols=True,
+            ncols=80,
             unit="B",
             unit_scale=True,
+            position=0,
+            leave=True,
         )
 
-        for i in range(math.floor((len(firmware_bytes) + 3) / 4)):
-            current_bytes_written = False
-            while not current_bytes_written:
-                data_message_data = data_message.encode(
-                    {
-                        "message_type": 1,
-                        "data_block_index": i,
-                        "update_data": firmware_bytes[i * 4]
-                        + (firmware_bytes[(i * 4) + 1] << 8)
-                        + (firmware_bytes[(i * 4) + 2] << 16)
-                        + (firmware_bytes[(i * 4) + 3] << 24),
-                    }
-                )
-                can_bus.send(
-                    can.Message(
-                        arbitration_id=data_message.frame_id, data=data_message_data
-                    )
-                )
+        msgs_in_block = 2
 
-                msg = can_bus.recv(0.1)
+        max_block_written = -1
+        last_update = 0
+        while max_block_written < math.floor((len(firmware_bytes) + 6) / 7) - 1:
+            for j in range(msgs_in_block):
+                data_idx = max_block_written + j + 1  # (i * msgs_in_block) + j
+                if data_idx < math.floor((len(firmware_bytes) + 6) / 7):
+                    data = 0
+                    for b in range(min(7, len(firmware_bytes) - (data_idx * 7))):
+                        data = data + (firmware_bytes[(data_idx * 7) + b] << (8 * b))
+                    data_message_data = data_message.encode(
+                        {
+                            "data_block_index_low": data_idx & 0xFF,
+                            "update_data": data,
+                        }
+                    )
+                    can_bus.send(
+                        can.Message(
+                            arbitration_id=data_message.frame_id
+                            + ((data_idx << 3) & 0x1FFFF800),
+                            data=data_message_data,
+                        )
+                    )
+                    time.sleep(1 / 3817)
+
+                msg = can_bus.recv(1 / 3817)
                 while msg is not None:
                     if msg.arbitration_id == progress_message.frame_id:
                         received_progress_msg = db.decode_message(
@@ -173,18 +185,31 @@ def on_upload(source, target, env):
                         )
                         # print(db.decode_message("update_progress_message", data_message_data))
                         # print(i)
-                        if (
-                            received_progress_msg["written"] == True
-                            and received_progress_msg["update_block_idx"] == i
-                        ) or (received_progress_msg["update_block_idx"] == i + 1):
-                            current_bytes_written = True
-                    msg = can_bus.recv(0.00001)
+                        if received_progress_msg["written"] == True:
+                            if (
+                                received_progress_msg["update_block_idx"]
+                                > max_block_written
+                            ):
+                                max_block_written = received_progress_msg[
+                                    "update_block_idx"
+                                ]
+                        else:
+                            if (
+                                received_progress_msg["update_block_idx"] - 1
+                                > max_block_written
+                            ):
+                                max_block_written = (
+                                    received_progress_msg["update_block_idx"] - 1
+                                )
+                    msg = can_bus.recv(0.000001)
 
-            if i % 1024 == 0:
-                bar.update(4096)
+            if max_block_written - last_update >= 1024:
+                bar.update((max_block_written - last_update) * 7)
+                last_update = max_block_written
                 # time.sleep(0.1)
-
+        bar.close()
         can_bus.shutdown()
+
 
 try:
     if env.GetProjectOption("upload_can") == "y":
