@@ -1089,7 +1089,7 @@ public:
 private:
     ICAN &can_interface_;
     uint32_t id_;
-    uint32_t id_mask_{0};
+    uint32_t id_mask_{0xFFFFFFFF};
     // A function to get the current time in millis on the current platform
     std::function<uint32_t(void)> get_millis_;
 
