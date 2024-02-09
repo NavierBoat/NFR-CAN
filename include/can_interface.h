@@ -1060,7 +1060,7 @@ public:
 
     void DecodeSignals(CANMessage message)
     {
-        if (message.id_ & id_mask_ != id_ * id_mask_)
+        if (message.id_ & id_mask_ != id_ & id_mask_)
         {
             return;
         }

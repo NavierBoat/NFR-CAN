@@ -157,7 +157,7 @@ def on_upload(source, target, env):
         last_update = 0
         while max_block_written < math.floor((len(firmware_bytes) + 6) / 7) - 1:
             for j in range(msgs_in_block):
-                data_idx = max_block_written + j + 1  # (i * msgs_in_block) + j
+                data_idx = max_block_written + j + 1
                 if data_idx < math.floor((len(firmware_bytes) + 6) / 7):
                     data = 0
                     for b in range(min(7, len(firmware_bytes) - (data_idx * 7))):
@@ -171,7 +171,9 @@ def on_upload(source, target, env):
                     can_bus.send(
                         can.Message(
                             arbitration_id=data_message.frame_id
-                            + ((data_idx << 3) & 0x1FFFF800),
+                            + (
+                                (data_idx << 3) & 0x1FFFF800
+                            ),  # 18 bits of CAN extended ID, not including standard ID
                             data=data_message_data,
                         )
                     )
