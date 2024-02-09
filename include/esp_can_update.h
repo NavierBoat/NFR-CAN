@@ -115,45 +115,45 @@ private:
         length_signal_group_,
         md5_signal_group_};
 
-    CANRXMessage<2> update_data_message_{
-        can_interface_,
-        kUpdateId,
-        [this]() {
-            uint64_t data = update_data_;
-            uint32_t index = ((update_data_message_.GetID() & 0x1FFFF800) >> 3) + data_block_index_low_;
-            if (static_cast<uint32_t>(update_block_idx_) == index)
-            {
-                if (index * 7 >= update_length_ - 7)
-                {
-                    Update.write(reinterpret_cast<uint8_t *>(&data), update_length_ - (index * 7));
-                    written_ = true;
-                    update_progress_message_.EncodeAndSend();
+    CANRXMessage<2> update_data_message_{can_interface_,
+                                         kUpdateId,
+                                         [this]() {
+                                             uint64_t data = update_data_;
+                                             uint32_t index = ((update_data_message_.GetID() & 0x1FFFF800/*18 bits of CAN extended ID, not including standard ID*/) >> 3) + data_block_index_low_;
+                                             if (static_cast<uint32_t>(update_block_idx_) == index)
+                                             {
+                                                 if (index * 7 >= update_length_ - 7)
+                                                 {
+                                                     Update.write(reinterpret_cast<uint8_t *>(&data),
+                                                                  update_length_ - (index * 7));
+                                                     written_ = true;
+                                                     update_progress_message_.EncodeAndSend();
 
-                    if (Update.end())
-                    {
-                        Serial.println("Update success!");
-                        ESP.restart();
-                    }
-                    else
-                    {
-                        Update.printError(Serial);
-                        Serial.printf("Expected MD5: %s\n", md5_cstr_);
-                        update_started_ = false;
-                        update_progress_message_.Disable();
-                    }
-                }
-                else
-                {
-                    Update.write(reinterpret_cast<uint8_t *>(&data), 7);
-                    written_ = true;
-                    update_progress_message_.EncodeAndSend();
-                    update_block_idx_ += 1;
-                    written_ = false;
-                    update_progress_message_.EncodeAndSend();
-                }
-            }
-        },
-        data_block_index_low_,
-        update_data_};
+                                                     if (Update.end())
+                                                     {
+                                                         Serial.println("Update success!");
+                                                         ESP.restart();
+                                                     }
+                                                     else
+                                                     {
+                                                         Update.printError(Serial);
+                                                         Serial.printf("Expected MD5: %s\n", md5_cstr_);
+                                                         update_started_ = false;
+                                                         update_progress_message_.Disable();
+                                                     }
+                                                 }
+                                                 else
+                                                 {
+                                                     Update.write(reinterpret_cast<uint8_t *>(&data), 7);
+                                                     written_ = true;
+                                                     update_progress_message_.EncodeAndSend();
+                                                     update_block_idx_ += 1;
+                                                     written_ = false;
+                                                     update_progress_message_.EncodeAndSend();
+                                                 }
+                                             }
+                                         },
+                                         data_block_index_low_,
+                                         update_data_};
 };
 #endif
