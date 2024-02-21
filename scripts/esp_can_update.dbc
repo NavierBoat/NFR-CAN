@@ -45,11 +45,12 @@ BO_ 1331 update_info_message: 6 Vector__XXX
  SG_ update_md5 m1 : 16|32@1+ (1,0) [0|0] "" Vector__XXX
  SG_ update_md5_idx m1 : 8|8@1+ (1,0) [0|0] "" Vector__XXX
 
-BO_ 1332 update_progress_message: 4 Vector__XXX
+BO_ 1332 update_progress_message: 8 Vector__XXX
  SG_ update_block_idx : 0|24@1+ (1,0) [0|0] "" Vector__XXX
  SG_ received_len : 24|1@1+ (1,0) [0|0] "" Vector__XXX
  SG_ received_md5 : 25|1@1+ (1,0) [0|0] "" Vector__XXX
  SG_ written : 26|1@1+ (1,0) [0|0] "" Vector__XXX
+ SG_ fw_version : 32|32@1+ (1,0) [0|0] "" Vector__XXX
 
 
 

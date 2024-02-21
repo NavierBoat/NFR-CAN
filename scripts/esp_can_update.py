@@ -138,20 +138,21 @@ def on_upload(source, target, env):
                 )
                 if received_progress_msg["received_len"]:
                     received_len = True
+                    print("Old firmware version: " + str(received_progress_msg["fw_version"]))
             while msg is not None:
                 msg = can_bus.recv(0.00001)
         tqdm._instances.clear()
         bar = tqdm(
             desc="Upload Progress",
             total=len(firmware_bytes),
-            ncols=80,
+            dynamic_ncols=True,
             unit="B",
             unit_scale=True,
             position=0,
             leave=True,
         )
 
-        msgs_in_block = 2
+        msgs_in_block = 4
 
         max_block_written = -1
         last_update = 0
@@ -205,11 +206,24 @@ def on_upload(source, target, env):
                                 )
                     msg = can_bus.recv(0.000001)
 
-            if max_block_written - last_update >= 1024:
+            if max_block_written - last_update >= 2048:
                 bar.update((max_block_written - last_update) * 7)
                 last_update = max_block_written
                 # time.sleep(0.1)
         bar.close()
+        print()
+        msg = can_bus.recv(1 / 3817)
+        recd = False
+        while not recd:
+            if msg is not None and msg.arbitration_id == progress_message.frame_id:
+                recd = True
+                received_progress_msg = db.decode_message(
+                    "update_progress_message", msg.data
+                )
+                print("New firmware version: " + str(received_progress_msg["fw_version"]))
+            else:
+                msg = can_bus.recv(1 / 3817)
+
         can_bus.shutdown()
 
 

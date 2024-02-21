@@ -15,12 +15,11 @@ public:
     CANUpdate(uint32_t update_id, ICAN &can_bus, VirtualTimerGroup &timer_group)
         : kUpdateId{update_id}, can_interface_{can_bus}, timer_group_{timer_group}
     {
-        update_progress_message_.Disable();
+        fw_version_ = kFirmwareVersion;
         update_data_message_.SetMask(0x7FF);
         timer_group_.AddTimer(100, [this]() {
             if (update_data_message_.GetTimeSinceLastReceive() >= kUpdateTimeout)
             {
-                update_progress_message_.Disable();
                 update_started_ = false;
                 received_md5_ = false;
                 received_len_ = false;
@@ -39,6 +38,12 @@ private:
     const uint32_t kUpdateId;
     ICAN &can_interface_;
     VirtualTimerGroup &timer_group_;
+
+#ifdef UNIX_TIMESTAMP
+    const uint32_t kFirmwareVersion{UNIX_TIMESTAMP};
+#else
+    constexpr uint32_t kFirmwareVersion{0};
+#endif
 
     const uint32_t kUpdateTimeout{500};
 
@@ -62,9 +67,18 @@ private:
     MakeUnsignedCANSignal(bool, 24, 1, 1, 0) received_len_{};
     MakeUnsignedCANSignal(bool, 25, 1, 1, 0) received_md5_{};
     MakeUnsignedCANSignal(bool, 26, 1, 1, 0) written_{};
+    MakeUnsignedCANSignal(uint32_t, 32, 32, 1, 0) fw_version_{};
 
-    CANTXMessage<4> update_progress_message_{
-        can_interface_, kUpdateId + 2, 4, 10, timer_group_, update_block_idx_, received_len_, received_md5_, written_};
+    CANTXMessage<5> update_progress_message_{can_interface_,
+                                             kUpdateId + 2,
+                                             8,
+                                             100,
+                                             timer_group_,
+                                             update_block_idx_,
+                                             received_len_,
+                                             received_md5_,
+                                             written_,
+                                             fw_version_};
 
     bool update_started_ = false;
     std::array<bool, 4> received_md5_arr_ = {false, false, false, false};
@@ -77,7 +91,6 @@ private:
         [this]() {
             if (message_type_ == MessageType::kMd5)
             {
-                update_progress_message_.Enable();
                 received_md5_arr_.at(static_cast<uint8_t>(update_md5_idx_)) = true;
                 md5_arr_[static_cast<uint8_t>(update_md5_idx_)] = update_md5_;
                 if (received_md5_arr_.at(0) && received_md5_arr_.at(1) && received_md5_arr_.at(2)
@@ -107,7 +120,6 @@ private:
                     update_started_ = true;
                     written_ = false;
                     update_progress_message_.EncodeAndSend();
-                    update_progress_message_.Enable();
                 }
             }
         },
@@ -120,7 +132,7 @@ private:
                                          [this]() {
                                              uint64_t data = update_data_;
                                              uint32_t index = ((update_data_message_.GetID() & 0x1FFFF800/*18 bits of CAN extended ID, not including standard ID*/) >> 3) + data_block_index_low_;
-                                             if (static_cast<uint32_t>(update_block_idx_) == index)
+                                             if (update_started_ && static_cast<uint32_t>(update_block_idx_) == index)
                                              {
                                                  if (index * 7 >= update_length_ - 7)
                                                  {
@@ -139,7 +151,6 @@ private:
                                                          Update.printError(Serial);
                                                          Serial.printf("Expected MD5: %s\n", md5_cstr_);
                                                          update_started_ = false;
-                                                         update_progress_message_.Disable();
                                                      }
                                                  }
                                                  else
