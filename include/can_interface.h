@@ -301,11 +301,12 @@ public:
     void InternalEncodeSignal(uint64_t *buffer)
     {
         SignalType signal = this->signal_;
-        signal = signal < kMinValue ? kMinValue : signal;
-        signal = signal > kMaxValue ? kMaxValue : signal;
+        underlying_type signal_raw = static_cast<underlying_type>(signal);
+        signal_raw = signal_raw < kMinRaw ? kMinRaw : signal_raw;
+        signal_raw = signal_raw > kMaxRaw ? kMaxRaw : signal_raw;
         if (byte_order == ICANSignal::ByteOrder::kLittleEndian)
         {
-            *buffer |= (static_cast<underlying_type>(signal) << position) & mask;
+            *buffer |= (signal_raw << position) & mask;
         }
         else
         {
@@ -313,7 +314,7 @@ public:
             void *temp_reversed_buffer_ptr{
                 temp_reversed_buffer};  // intermediate as void* to get rid of strict aliasing compiler warnings
             *reinterpret_cast<underlying_type *>(temp_reversed_buffer_ptr) |=
-                (static_cast<underlying_type>(signal) << (64 - (length + position)));
+                (static_cast<underlying_type>(signal_raw) << (64 - (length + position)));
             std::reverse(std::begin(temp_reversed_buffer), std::end(temp_reversed_buffer));
             *buffer |= *reinterpret_cast<underlying_type *>(temp_reversed_buffer_ptr) & mask;
         }
@@ -322,23 +323,20 @@ public:
     template <bool unity_factor_ = unity_factor, typename std::enable_if<!unity_factor_, void>::type * = nullptr>
     void InternalEncodeSignal(uint64_t *buffer)
     {
-        SignalType signal = this->signal_;
-        signal = signal < kMinValue ? kMinValue : signal;
-        signal = signal > kMaxValue ? kMaxValue : signal;
+        underlying_type signal_raw =
+            static_cast<underlying_type>(((this->signal_ - CANTemplateGetFloat(offset)) / CANTemplateGetFloat(factor)));
+        signal_raw = signal_raw < kMinRaw ? kMinRaw : signal_raw;
+        signal_raw = signal_raw > kMaxRaw ? kMaxRaw : signal_raw;
         if (byte_order == ICANSignal::ByteOrder::kLittleEndian)
         {
-            *buffer |=
-                (static_cast<underlying_type>(((signal - CANTemplateGetFloat(offset)) / CANTemplateGetFloat(factor)))
-                 << position)
-                & mask;
+            *buffer |= (signal_raw << position) & mask;
         }
         else
         {
             uint8_t temp_reversed_buffer[8]{0};
             void *temp_reversed_buffer_ptr{temp_reversed_buffer};
             *reinterpret_cast<underlying_type *>(temp_reversed_buffer_ptr) |=
-                (static_cast<underlying_type>(((signal - CANTemplateGetFloat(offset)) / CANTemplateGetFloat(factor)))
-                 << (64 - (position + length)));
+                (signal_raw << (64 - (position + length)));
             std::reverse(std::begin(temp_reversed_buffer), std::end(temp_reversed_buffer));
             *buffer |= *reinterpret_cast<underlying_type *>(temp_reversed_buffer_ptr) & mask;
         }
@@ -409,10 +407,9 @@ public:
 
 private:
     std::function<SignalType(void)> get_data_;
-    const SignalType kMaxValue{static_cast<SignalType>(
-        static_cast<underlying_type>((((1ull << length) - 1) * factor * signed_raw ? 0.5 : 1) + offset))};
-    const SignalType kMinValue{static_cast<SignalType>(
-        static_cast<underlying_type>(signed_raw ? ((((1ull << length) - 1) * factor * -0.5) + offset) : offset))};
+    const underlying_type kMaxRaw{static_cast<underlying_type>(
+        signed_raw ? ((1ul << (length - 1)) - 1) : (length == 64 ? 0xFFFFFFFFFFFFFFFF : (1ul << length) - 1))};
+    const underlying_type kMinRaw{static_cast<underlying_type>(signed_raw ? (-(1ul << (length - 1))) : 0)};
 };
 
 // Macros for making signed and unsigned CAN signals, default little-endian
