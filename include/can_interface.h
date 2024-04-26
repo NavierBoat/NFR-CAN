@@ -123,26 +123,20 @@ constexpr uint8_t CANSignal_generate_position(uint8_t position,
                                               BigEndianPositionType position_type)
 {
     return static_cast<uint8_t>(
-        (byte_order == ICANSignal::ByteOrder::kLittleEndian)
-            ? position
-            : position_type == BigEndianPositionType::kDbc
-                  ? (position - (position % 8) /*bits in full bytes before*/)
-                        + (7 - (position % 8 /*bits in last byte*/))
-                  : (length - (8 - (position % 8)) /* bits_in_last_byte */ <= 0)
-                        ? (position + length) % 8 == 0 ? position + length - 8 : position + length
-                        : position
-                              - ((8
-                                  * (((length - (8 - (position % 8)) /* bits_in_last_byte */) % 8) /* remaining_bits */
-                                             == 0
-                                         ? ((length - (8 - (position % 8)) /* bits_in_last_byte */)
-                                            / 8) /* full_bytes */
-                                         : ((length - (8 - (position % 8)) /* bits_in_last_byte */)
-                                            / 8) /* full_bytes */
-                                               + 1))
-                                 + (8
-                                    - ((length - (8 - (position % 8)) /* bits_in_last_byte */)
-                                       % 8) /* remaining_bits */)
-                                 - (8 - (position % 8)) /* bits_in_last_byte */));
+        (byte_order == ICANSignal::ByteOrder::kLittleEndian) ? position
+        : position_type == BigEndianPositionType::kDbc
+            ? (position - (position % 8) /*bits in full bytes before*/) + (7 - (position % 8 /*bits in last byte*/))
+        : (length - (8 - (position % 8)) /* bits_in_last_byte */ <= 0)
+            ? (position + length) % 8 == 0 ? position + length - 8 : position + length
+            : position
+                  - ((8
+                      * (((length - (8 - (position % 8)) /* bits_in_last_byte */) % 8) /* remaining_bits */
+                                 == 0
+                             ? ((length - (8 - (position % 8)) /* bits_in_last_byte */) / 8) /* full_bytes */
+                             : ((length - (8 - (position % 8)) /* bits_in_last_byte */) / 8) /* full_bytes */
+                                   + 1))
+                     + (8 - ((length - (8 - (position % 8)) /* bits_in_last_byte */) % 8) /* remaining_bits */)
+                     - (8 - (position % 8)) /* bits_in_last_byte */));
     /*
         if (byte_order == ICANSignal::ByteOrder::kLittleEndian)
         {
@@ -306,14 +300,15 @@ public:
     template <bool unity_factor_ = unity_factor, typename std::enable_if<unity_factor_, void>::type * = nullptr>
     void InternalEncodeSignal(uint64_t *buffer)
     {
+        SignalType signal = this->signal_;
+        signal = signal < kMinValue ? kMinValue : signal;
+        signal = signal > kMaxValue ? kMaxValue : signal;
         if (byte_order == ICANSignal::ByteOrder::kLittleEndian)
         {
-            SignalType signal = this->signal_;
             *buffer |= (static_cast<underlying_type>(signal) << position) & mask;
         }
         else
         {
-            SignalType signal = this->signal_;
             uint8_t temp_reversed_buffer[8]{0};
             void *temp_reversed_buffer_ptr{
                 temp_reversed_buffer};  // intermediate as void* to get rid of strict aliasing compiler warnings
@@ -327,9 +322,11 @@ public:
     template <bool unity_factor_ = unity_factor, typename std::enable_if<!unity_factor_, void>::type * = nullptr>
     void InternalEncodeSignal(uint64_t *buffer)
     {
+        SignalType signal = this->signal_;
+        signal = signal < kMinValue ? kMinValue : signal;
+        signal = signal > kMaxValue ? kMaxValue : signal;
         if (byte_order == ICANSignal::ByteOrder::kLittleEndian)
         {
-            SignalType signal = this->signal_;
             *buffer |=
                 (static_cast<underlying_type>(((signal - CANTemplateGetFloat(offset)) / CANTemplateGetFloat(factor)))
                  << position)
@@ -337,7 +334,6 @@ public:
         }
         else
         {
-            SignalType signal = this->signal_;
             uint8_t temp_reversed_buffer[8]{0};
             void *temp_reversed_buffer_ptr{temp_reversed_buffer};
             *reinterpret_cast<underlying_type *>(temp_reversed_buffer_ptr) |=
@@ -413,6 +409,10 @@ public:
 
 private:
     std::function<SignalType(void)> get_data_;
+    const SignalType kMaxValue{static_cast<SignalType>(
+        static_cast<underlying_type>((((1ull << length) - 1) * factor * signed_raw ? 0.5 : 1) + offset))};
+    const SignalType kMinValue{static_cast<SignalType>(
+        static_cast<underlying_type>(signed_raw ? ((((1ull << length) - 1) * factor * -0.5) + offset) : offset))};
 };
 
 // Macros for making signed and unsigned CAN signals, default little-endian
@@ -536,7 +536,7 @@ class MultiplexedSignalGroup : public std::array<ICANSignal *, num_signals>, pub
 {
 public:
     template <typename... Ts>
-    MultiplexedSignalGroup(MultiplexorType multiplexor_value, Ts &... signals)
+    MultiplexedSignalGroup(MultiplexorType multiplexor_value, Ts &...signals)
         : std::array<ICANSignal *, num_signals>{&signals...}
     {
         static_assert(sizeof...(signals) == num_signals, "Wrong number of signals passed into SignalGroup.");
@@ -545,7 +545,7 @@ public:
     }
 
     template <typename... Ts>
-    MultiplexedSignalGroup(bool always_active, MultiplexorType multiplexor_value, Ts &... signals)
+    MultiplexedSignalGroup(bool always_active, MultiplexorType multiplexor_value, Ts &...signals)
         : std::array<ICANSignal *, num_signals>{&signals...}
     {
         static_assert(sizeof...(signals) == num_signals, "Wrong number of signals passed into SignalGroup.");
@@ -583,7 +583,7 @@ public:
                  uint8_t length,
                  uint32_t period,
                  ICANSignal &signal_1,
-                 Ts &... signals)
+                 Ts &...signals)
         : can_interface_{can_interface},
           message_{id, extended_id, length, std::array<uint8_t, 8>()},
           transmit_timer_{period, [this]() { this->EncodeAndSend(); }, VirtualTimer::Type::kRepeating},
@@ -604,7 +604,7 @@ public:
      * @param signals The ICANSignals contained in the message
      */
     CANTXMessage(
-        ICAN &can_interface, uint32_t id, uint8_t length, uint32_t period, ICANSignal &signal_1, Ts &... signals)
+        ICAN &can_interface, uint32_t id, uint8_t length, uint32_t period, ICANSignal &signal_1, Ts &...signals)
         : CANTXMessage(can_interface, id, false, length, period, signal_1, signals...)
     {
     }
@@ -629,7 +629,7 @@ public:
                  uint32_t period,
                  VirtualTimerGroup &timer_group,
                  ICANSignal &signal_1,
-                 Ts &... signals)
+                 Ts &...signals)
         : CANTXMessage(can_interface, id, extended_id, length, period, signal_1, signals...)
     {
         timer_group.AddTimer(transmit_timer_);
@@ -654,7 +654,7 @@ public:
                  uint32_t period,
                  VirtualTimerGroup &timer_group,
                  ICANSignal &signal_1,
-                 Ts &... signals)
+                 Ts &...signals)
         : CANTXMessage(can_interface, id, false, length, period, timer_group, signal_1, signals...)
     {
     }
@@ -712,7 +712,7 @@ public:
                             uint32_t period,
                             std::array<MultiplexorType, num_multiplexors_to_transmit> multiplexor_values_to_transmit,
                             ITypedCANSignal<MultiplexorType> &multiplexor,
-                            Ts &... signal_groups)
+                            Ts &...signal_groups)
         : can_interface_{can_interface},
           message_{id, extended_id, length, std::array<uint8_t, 8>()},
 #if !defined(NATIVE)  // workaround for unit tests
@@ -752,7 +752,7 @@ public:
                             uint32_t period,
                             std::array<MultiplexorType, num_multiplexors_to_transmit> multiplexor_values_to_transmit,
                             ITypedCANSignal<MultiplexorType> &multiplexor,
-                            Ts &... signal_groups)
+                            Ts &...signal_groups)
         : MultiplexedCANTXMessage(
             can_interface, id, false, length, period, multiplexor_values_to_transmit, multiplexor, signal_groups...)
     {
@@ -779,7 +779,7 @@ public:
                             VirtualTimerGroup &timer_group,
                             std::array<MultiplexorType, num_multiplexors_to_transmit> multiplexor_values_to_transmit,
                             ITypedCANSignal<MultiplexorType> &multiplexor,
-                            Ts &... signal_groups)
+                            Ts &...signal_groups)
         : MultiplexedCANTXMessage(can_interface,
                                   id,
                                   extended_id,
@@ -814,7 +814,7 @@ public:
                             VirtualTimerGroup &timer_group,
                             std::array<MultiplexorType, num_multiplexors_to_transmit> multiplexor_values_to_transmit,
                             ITypedCANSignal<MultiplexorType> &multiplexor,
-                            Ts &... signal_groups)
+                            Ts &...signal_groups)
         : MultiplexedCANTXMessage(can_interface,
                                   id,
                                   false,
@@ -940,7 +940,7 @@ public:
                     uint8_t length,
                     uint32_t period,
                     ICANSignal &signal_1,
-                    Ts &... signals)
+                    Ts &...signals)
         : can_interface_{can_interface},
           message_{id, length, std::array<uint8_t, 8>()},
           transmit_timer_{period, [this]() { this->EncodeAndSend(); }, VirtualTimer::Type::kRepeating},
@@ -968,7 +968,7 @@ public:
                     uint32_t period,
                     VirtualTimerGroup &timer_group,
                     ICANSignal &signal_1,
-                    Ts &... signals)
+                    Ts &...signals)
         : PGNCANTXMessage(can_interface, id, length, period, signal_1, signals...)
     {
         timer_group.AddTimer(transmit_timer_);
@@ -1017,7 +1017,7 @@ public:
                  std::function<uint32_t(void)> get_millis,
                  std::function<void(void)> callback_function,
                  ICANSignal &signal_1,
-                 Ts &... signals)
+                 Ts &...signals)
         : can_interface_{can_interface},
           id_{id},
           get_millis_{get_millis},
@@ -1033,7 +1033,7 @@ public:
                  uint32_t id,
                  std::function<uint32_t(void)> get_millis,
                  ICANSignal &signal_1,
-                 Ts &... signals)
+                 Ts &...signals)
         : CANRXMessage{can_interface, id, get_millis, nullptr, signal_1, signals...}
     {
     }
@@ -1046,13 +1046,13 @@ public:
                  uint32_t id,
                  std::function<void(void)> callback_function,
                  ICANSignal &signal_1,
-                 Ts &... signals)
+                 Ts &...signals)
         : CANRXMessage{can_interface, id, []() { return millis(); }, callback_function, signal_1, signals...}
     {
     }
 
     template <typename... Ts>
-    CANRXMessage(ICAN &can_interface, uint32_t id, ICANSignal &signal_1, Ts &... signals)
+    CANRXMessage(ICAN &can_interface, uint32_t id, ICANSignal &signal_1, Ts &...signals)
         : CANRXMessage{can_interface, id, []() { return millis(); }, nullptr, signal_1, signals...}
     {
     }
@@ -1115,7 +1115,7 @@ public:
                             std::function<uint32_t(void)> get_millis,
                             std::function<void(void)> callback_function,
                             ITypedCANSignal<MultiplexorType> &multiplexor,
-                            Ts &... signal_groups)
+                            Ts &...signal_groups)
         : can_interface_{can_interface},
           id_{id},
           get_millis_{get_millis},
@@ -1142,7 +1142,7 @@ public:
                             uint32_t id,
                             std::function<uint32_t(void)> get_millis,
                             ITypedCANSignal<MultiplexorType> &multiplexor,
-                            Ts &... signal_groups)
+                            Ts &...signal_groups)
         : MultiplexedCANRXMessage{can_interface, id, get_millis, nullptr, multiplexor, signal_groups...}
     {
     }
@@ -1155,7 +1155,7 @@ public:
                             uint32_t id,
                             std::function<void(void)> callback_function,
                             ITypedCANSignal<MultiplexorType> &multiplexor,
-                            Ts &... signal_groups)
+                            Ts &...signal_groups)
         : MultiplexedCANRXMessage{
             can_interface, id, []() { return millis(); }, callback_function, multiplexor, signal_groups...}
     {
@@ -1165,7 +1165,7 @@ public:
     MultiplexedCANRXMessage(ICAN &can_interface,
                             uint32_t id,
                             ITypedCANSignal<MultiplexorType> &multiplexor,
-                            Ts &... signal_groups)
+                            Ts &...signal_groups)
         : MultiplexedCANRXMessage{can_interface, id, []() { return millis(); }, nullptr, multiplexor, signal_groups...}
     {
     }
@@ -1258,7 +1258,7 @@ public:
                     std::function<uint32_t(void)> get_millis,
                     std::function<void(void)> callback_function,
                     ICANSignal &signal_1,
-                    Ts &... signals)
+                    Ts &...signals)
         : can_interface_{can_interface},
           id_{id},
           get_millis_{get_millis},
@@ -1274,7 +1274,7 @@ public:
                     PGNCANMessage::ExtendedId id,
                     std::function<uint32_t(void)> get_millis,
                     ICANSignal &signal_1,
-                    Ts &... signals)
+                    Ts &...signals)
         : PGNCANRXMessage{can_interface, id, get_millis, nullptr, signal_1, signals...}
     {
     }
@@ -1287,13 +1287,13 @@ public:
                     PGNCANMessage::ExtendedId id,
                     std::function<void(void)> callback_function,
                     ICANSignal &signal_1,
-                    Ts &... signals)
+                    Ts &...signals)
         : PGNCANRXMessage{can_interface, id, []() { return millis(); }, callback_function, signal_1, signals...}
     {
     }
 
     template <typename... Ts>
-    PGNCANRXMessage(ICAN &can_interface, PGNCANMessage::ExtendedId id, ICANSignal &signal_1, Ts &... signals)
+    PGNCANRXMessage(ICAN &can_interface, PGNCANMessage::ExtendedId id, ICANSignal &signal_1, Ts &...signals)
         : PGNCANRXMessage{can_interface, id, []() { return millis(); }, nullptr, signal_1, signals...}
     {
     }
