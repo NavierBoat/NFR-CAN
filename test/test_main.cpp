@@ -284,6 +284,85 @@ void IVTBigEndianCanSignalTest(void)
     TEST_ASSERT_EQUAL_HEX32(0xF7F7B5B5, Result.value_ref());
 }
 
+void SafeRawSignalLimitTest(void)
+{
+    MakeUnsignedCANSignal(uint16_t, 0, 8, 1, 0) test_signal;
+    MakeUnsignedCANSignal(int16_t, 8, 8, 1, 0) test_signal_signed_unsigned;
+    MakeSignedCANSignal(int16_t, 16, 8, 1, 0) test_signal_signed;
+    uint8_t max_value = 0xFF;
+    int8_t max_value_signed = 0x7F;
+    uint8_t min_value = 0;
+    int8_t min_value_signed = -0x80;
+
+    uint8_t msg[8];
+    uint64_t* full_msg = reinterpret_cast<uint64_t*>(msg);
+    *full_msg = 0;
+
+    test_signal = 300;
+    test_signal_signed_unsigned = 300;
+    test_signal_signed = 300;
+    test_signal.EncodeSignal(full_msg);
+    test_signal_signed_unsigned.EncodeSignal(full_msg);
+    test_signal_signed.EncodeSignal(full_msg);
+    test_signal.DecodeSignal(full_msg);
+    test_signal_signed_unsigned.DecodeSignal(full_msg);
+    test_signal_signed.DecodeSignal(full_msg);
+    TEST_ASSERT_EQUAL_HEX8(max_value, test_signal);
+    TEST_ASSERT_EQUAL_HEX8(max_value, test_signal_signed_unsigned);
+    TEST_ASSERT_EQUAL_HEX8(max_value_signed, test_signal_signed);
+
+    *full_msg = 0;
+    test_signal = 0;
+    test_signal_signed_unsigned = -300;
+    test_signal_signed = -300;
+    test_signal.EncodeSignal(full_msg);
+    test_signal_signed_unsigned.EncodeSignal(full_msg);
+    test_signal_signed.EncodeSignal(full_msg);
+    test_signal.DecodeSignal(full_msg);
+    test_signal_signed_unsigned.DecodeSignal(full_msg);
+    test_signal_signed.DecodeSignal(full_msg);
+    TEST_ASSERT_EQUAL_HEX8(min_value, test_signal);
+    TEST_ASSERT_EQUAL_HEX8(min_value, test_signal_signed_unsigned);
+    TEST_ASSERT_EQUAL_HEX8(min_value_signed, test_signal_signed);
+
+    MakeUnsignedCANSignal(uint16_t, 0, 8, 0.5, -20) test_signal_2;
+    MakeUnsignedCANSignal(int16_t, 8, 8, 0.5, -20) test_signal_signed_unsigned_2;
+    MakeSignedCANSignal(int16_t, 16, 8, 0.5, -20) test_signal_signed_2;
+    max_value = 0xFF / 2 - 20;
+    max_value_signed = 0x7F / 2 - 20;
+    min_value = -20;
+    min_value_signed = -0x80 / 2 - 20;
+
+    *full_msg = 0;
+
+    test_signal_2 = 300;
+    test_signal_signed_unsigned_2 = 300;
+    test_signal_signed_2 = 300;
+    test_signal_2.EncodeSignal(full_msg);
+    test_signal_signed_unsigned_2.EncodeSignal(full_msg);
+    test_signal_signed_2.EncodeSignal(full_msg);
+    test_signal_2.DecodeSignal(full_msg);
+    test_signal_signed_unsigned_2.DecodeSignal(full_msg);
+    test_signal_signed_2.DecodeSignal(full_msg);
+    TEST_ASSERT_EQUAL_HEX8(max_value, test_signal_2);
+    TEST_ASSERT_EQUAL_HEX8(max_value, test_signal_signed_unsigned_2);
+    TEST_ASSERT_EQUAL_HEX8(max_value_signed, test_signal_signed_2);
+
+    *full_msg = 0;
+    test_signal_2 = 0;
+    test_signal_signed_unsigned_2 = -300;
+    test_signal_signed_2 = -300;
+    test_signal_2.EncodeSignal(full_msg);
+    test_signal_signed_unsigned_2.EncodeSignal(full_msg);
+    test_signal_signed_2.EncodeSignal(full_msg);
+    test_signal_2.DecodeSignal(full_msg);
+    test_signal_signed_unsigned_2.DecodeSignal(full_msg);
+    test_signal_signed_2.DecodeSignal(full_msg);
+    TEST_ASSERT_EQUAL_HEX8(0, test_signal_2);
+    TEST_ASSERT_EQUAL_HEX8(min_value, test_signal_signed_unsigned_2);
+    TEST_ASSERT_EQUAL_HEX8(min_value_signed, test_signal_signed_2);
+}
+
 int runUnityTests(void)
 {
     UNITY_BEGIN();
@@ -297,6 +376,7 @@ int runUnityTests(void)
     RUN_TEST(OperatorsTest);
     RUN_TEST(MultiplexedCANMessageTest);
     RUN_TEST(IVTBigEndianCanSignalTest);
+    RUN_TEST(SafeRawSignalLimitTest);
     return UNITY_END();
 }
 

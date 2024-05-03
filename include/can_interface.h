@@ -1,5 +1,6 @@
 #pragma once
 
+#include <inttypes.h>
 #include <stdint.h>
 
 #include <algorithm>
@@ -301,6 +302,10 @@ public:
     void InternalEncodeSignal(uint64_t *buffer)
     {
         SignalType signal = this->signal_;
+        if (!signed_raw && signal < static_cast<SignalType>(0))
+        {
+            signal = static_cast<SignalType>(0);
+        }
         underlying_type signal_raw = static_cast<underlying_type>(signal);
         signal_raw = signal_raw < kMinRaw ? kMinRaw : signal_raw;
         signal_raw = signal_raw > kMaxRaw ? kMaxRaw : signal_raw;
@@ -323,8 +328,13 @@ public:
     template <bool unity_factor_ = unity_factor, typename std::enable_if<!unity_factor_, void>::type * = nullptr>
     void InternalEncodeSignal(uint64_t *buffer)
     {
+        SignalType signal = this->signal_;
+        if (!signed_raw && signal < CANTemplateGetFloat(offset))
+        {
+            signal = static_cast<SignalType>(CANTemplateGetFloat(offset));
+        }
         underlying_type signal_raw =
-            static_cast<underlying_type>(((this->signal_ - CANTemplateGetFloat(offset)) / CANTemplateGetFloat(factor)));
+            static_cast<underlying_type>(((signal - CANTemplateGetFloat(offset)) / CANTemplateGetFloat(factor)));
         signal_raw = signal_raw < kMinRaw ? kMinRaw : signal_raw;
         signal_raw = signal_raw > kMaxRaw ? kMaxRaw : signal_raw;
         if (byte_order == ICANSignal::ByteOrder::kLittleEndian)
@@ -408,8 +418,11 @@ public:
 private:
     std::function<SignalType(void)> get_data_;
     const underlying_type kMaxRaw{static_cast<underlying_type>(
-        signed_raw ? ((1ull << (length - 1)) - 1) : (length == 64 ? 0xFFFFFFFFFFFFFFFFull : (1ull << length) - 1))};
-    const underlying_type kMinRaw{static_cast<underlying_type>(signed_raw ? (-(1ull << (length - 1))) : 0)};
+        signed_raw
+            ? ((static_cast<uint64_t>(1) << (length - 1)) - 1)
+            : (length == 64 ? static_cast<uint64_t>(0xFFFFFFFFFFFFFFFF) : (static_cast<uint64_t>(1) << length) - 1))};
+    const underlying_type kMinRaw{
+        static_cast<underlying_type>(signed_raw ? (-(static_cast<uint64_t>(1) << (length - 1))) : 0)};
 };
 
 // Macros for making signed and unsigned CAN signals, default little-endian
