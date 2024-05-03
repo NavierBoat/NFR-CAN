@@ -408,8 +408,8 @@ public:
 private:
     std::function<SignalType(void)> get_data_;
     const underlying_type kMaxRaw{static_cast<underlying_type>(
-        signed_raw ? ((1ul << (length - 1)) - 1) : (length == 64 ? 0xFFFFFFFFFFFFFFFF : (1ul << length) - 1))};
-    const underlying_type kMinRaw{static_cast<underlying_type>(signed_raw ? (-(1ul << (length - 1))) : 0)};
+        signed_raw ? ((1ull << (length - 1)) - 1) : (length == 64 ? 0xFFFFFFFFFFFFFFFFull : (1ull << length) - 1))};
+    const underlying_type kMinRaw{static_cast<underlying_type>(signed_raw ? (-(1ull << (length - 1))) : 0)};
 };
 
 // Macros for making signed and unsigned CAN signals, default little-endian
