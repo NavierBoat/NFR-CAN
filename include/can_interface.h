@@ -421,9 +421,10 @@ public:
 
 private:
     const underlying_type kMaxRaw{static_cast<underlying_type>(
-        signed_raw
-            ? ((static_cast<uint64_t>(1) << (length - 1)) - 1)
-            : (length == 64 ? static_cast<uint64_t>(0xFFFFFFFFFFFFFFFF) : (static_cast<uint64_t>(1) << length) - 1))};
+        signed_raw ? ((static_cast<uint64_t>(1) << (length - 1)) - 1)
+                   : (length == 64 ? static_cast<uint64_t>(0xFFFFFFFFFFFFFFFF)
+                                   : (static_cast<uint64_t>(1) << (length == 64 ? 0 : length))
+                                         - 1))};  // filter length 64 to fix clang error
     const underlying_type kMinRaw{
         static_cast<underlying_type>(signed_raw ? (-(static_cast<uint64_t>(1) << (length - 1))) : 0)};
 };
