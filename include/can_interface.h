@@ -865,7 +865,6 @@ public:
     void EncodeAndSend(MultiplexorType multiplexor_value)
     {
         *multiplexor_ = multiplexor_value;
-        multiplexor_->EncodeSignal(reinterpret_cast<uint64_t *>(message_.data_.data));
         EncodeSignals();
         can_interface_.SendMessage(message_);
     }
