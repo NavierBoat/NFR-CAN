@@ -82,7 +82,7 @@ public:
                           .pgn = static_cast<uint32_t>(pgn & 0x3FFFF),
                           .priority = static_cast<uint8_t>(priority & 0b111)
 
-            }
+              }
         {
         }
     };
@@ -175,9 +175,12 @@ template <typename SignalType>
 class ITypedCANSignal : public ICANSignal
 {
 public:
+    ITypedCANSignal(std::function<SignalType(void)> get_data) : get_data_{get_data} {}
     Atomic<SignalType> &value_ref() { return signal_; }
 
     operator SignalType() const { return signal_; }
+
+    bool HasGetDataCallback() const { return get_data_ != nullptr; }
 
     void operator=(const SignalType &signal) { signal_ = signal; }
 
@@ -217,6 +220,7 @@ public:
 
 protected:
     Atomic<SignalType> signal_;
+    std::function<SignalType(void)> get_data_;
 };
 
 // Needed so compiler knows these template classes exist
@@ -283,7 +287,7 @@ public:
     CANSignal(std::function<SignalType(void)> get_data) : CANSignal(static_cast<SignalType>(0), get_data) {}
 
     CANSignal(SignalType init = static_cast<SignalType>(0), std::function<SignalType(void)> get_data = nullptr)
-        : get_data_{get_data}
+        : ITypedCANSignal<SignalType>{get_data}
     {
         static_assert(factor != 0, "The integer representation of the factor for a CAN signal must not be 0");
         this->signal_ = init;
@@ -291,9 +295,9 @@ public:
 
     void EncodeSignal(uint64_t *buffer) override
     {
-        if (get_data_ != nullptr)
+        if (this->get_data_ != nullptr)
         {
-            this->signal_ = get_data_();
+            this->signal_ = this->get_data_();
         }
         InternalEncodeSignal(buffer);
     }
@@ -416,7 +420,6 @@ public:
     SignalType operator/=(const SignalType &signal) { return ITypedCANSignal<SignalType>::operator/=(signal); }
 
 private:
-    std::function<SignalType(void)> get_data_;
     const underlying_type kMaxRaw{static_cast<underlying_type>(
         signed_raw
             ? ((static_cast<uint64_t>(1) << (length - 1)) - 1)
@@ -520,9 +523,7 @@ public:
         last_message = msg;
         return true;
     }
-    void RegisterRXMessage(ICANRXMessage &msg __attribute__((unused)))
-    { /* rx_messages_.push_back(&msg); */
-    }
+    void RegisterRXMessage(ICANRXMessage &msg __attribute__((unused))) { /* rx_messages_.push_back(&msg); */ }
     void Tick() {}
 
     CANMessage last_message{0, 8, std::array<uint8_t, 8>{0}};
@@ -764,7 +765,7 @@ public:
                             ITypedCANSignal<MultiplexorType> &multiplexor,
                             Ts &...signal_groups)
         : MultiplexedCANTXMessage(
-            can_interface, id, false, length, period, multiplexor_values_to_transmit, multiplexor, signal_groups...)
+              can_interface, id, false, length, period, multiplexor_values_to_transmit, multiplexor, signal_groups...)
     {
     }
 
@@ -837,25 +838,35 @@ public:
     {
     }
 
-    void EncodeAndSend() override  // increments multiplexor automatically
+    void EncodeAndSend()
+        override  // increments multiplexor automatically, or uses the multiplexor's callback if available
     {
-        *multiplexor_ = multiplexor_values_to_transmit_.at(static_cast<size_t>(multiplexor_index_));
-        EncodeSignals(GetSignalGroupIndex(*multiplexor_));
+        if (num_multiplexors_to_transmit > 0)
+        {
+            *multiplexor_ = multiplexor_values_to_transmit_.at(static_cast<size_t>(multiplexor_index_));
+            if (multiplexor_index_ < num_multiplexors_to_transmit - 1)
+            {
+                multiplexor_index_ += 1;
+            }
+            else
+            {
+                multiplexor_index_ = 0;
+            }
+        }
+        else if (!multiplexor_->HasGetDataCallback())
+        {
+            // No multiplexor values to transmit, do nothing
+            return;
+        }
+        EncodeSignals();
         can_interface_.SendMessage(message_);
-        if (multiplexor_index_ < num_multiplexors_to_transmit - 1)
-        {
-            multiplexor_index_ += 1;
-        }
-        else
-        {
-            multiplexor_index_ = 0;
-        }
     }
 
     void EncodeAndSend(MultiplexorType multiplexor_value)
     {
         *multiplexor_ = multiplexor_value;
-        EncodeSignals(GetSignalGroupIndex(*multiplexor_));
+        multiplexor_->EncodeSignal(reinterpret_cast<uint64_t *>(message_.data_.data));
+        EncodeSignals();
         can_interface_.SendMessage(message_);
     }
 
@@ -866,10 +877,16 @@ public:
 #endif
 
     void Enable()
-    { /* transmit_timer_.Enable(); */
+    {
+#if !defined(NATIVE)  // workaround for unit tests
+        transmit_timer_.Enable();
+#endif
     }
     void Disable()
-    { /* transmit_timer_.Disable(); */
+    {
+#if !defined(NATIVE)  // workaround for unit tests
+        transmit_timer_.Disable();
+#endif
     }
 
 private:
@@ -892,7 +909,8 @@ private:
         for (size_t i = 0; i < num_groups; i++)
         {
             if (static_cast<uint64_t>(multiplexor_value)
-                == static_cast<uint64_t>(signal_groups_.at(i)->multiplexor_value_))
+                    == static_cast<uint64_t>(signal_groups_.at(i)->multiplexor_value_)
+                && !signal_groups_.at(i)->always_active_)
             {
                 index = i;
                 break;
@@ -901,10 +919,11 @@ private:
         return index;
     }
 
-    void EncodeSignals(uint64_t signal_group_index)
+    void EncodeSignals()
     {
         uint8_t temp_raw[8]{0};
         multiplexor_->EncodeSignal(reinterpret_cast<uint64_t *>(temp_raw));
+        uint64_t signal_group_index = GetSignalGroupIndex(*multiplexor_);
         if (has_always_active_signal_group_)
         {
             for (uint8_t i = 0; i < signal_groups_.at(static_cast<size_t>(always_active_signal_group_index_))->size();
@@ -924,7 +943,6 @@ private:
                     ->EncodeSignal(reinterpret_cast<uint64_t *>(temp_raw));
             }
         }
-
         std::copy(std::begin(temp_raw), std::end(temp_raw), message_.data_.begin());
     }
 };
@@ -1167,7 +1185,7 @@ public:
                             ITypedCANSignal<MultiplexorType> &multiplexor,
                             Ts &...signal_groups)
         : MultiplexedCANRXMessage{
-            can_interface, id, []() { return millis(); }, callback_function, multiplexor, signal_groups...}
+              can_interface, id, []() { return millis(); }, callback_function, multiplexor, signal_groups...}
     {
     }
 
