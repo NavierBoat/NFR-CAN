@@ -1234,13 +1234,12 @@ public:
             }
         }
 
-        if (multiplexor_index == 0xFFFFFFFFull)  // If the multiplexor is invalid, don't decode any signals
+        if (multiplexor_index != 0xFFFFFFFFull)  // If the multiplexor is invalid, don't decode any signals
         {
-            return;
-        }
-        for (uint8_t i = 0; i < signal_groups_.at(multiplexor_index)->size(); i++)
-        {
-            signal_groups_.at(multiplexor_index)->at(i)->DecodeSignal(&raw_message_);
+            for (uint8_t i = 0; i < signal_groups_.at(multiplexor_index)->size(); i++)
+            {
+                signal_groups_.at(multiplexor_index)->at(i)->DecodeSignal(&raw_message_);
+            }
         }
 
         // DecodeSignals is called only on message received
