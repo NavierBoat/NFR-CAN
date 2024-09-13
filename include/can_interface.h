@@ -1227,7 +1227,8 @@ public:
         {
             MultiplexorType multiplexor_value = *multiplexor_;
             if (static_cast<uint64_t>(multiplexor_value)
-                == static_cast<uint64_t>(signal_groups_.at(i)->multiplexor_value_))
+                    == static_cast<uint64_t>(signal_groups_.at(i)->multiplexor_value_)
+                && i != always_active_signal_group_index_)
             {
                 multiplexor_index = i;
                 break;
