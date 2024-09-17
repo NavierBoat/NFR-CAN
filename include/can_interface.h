@@ -82,7 +82,7 @@ public:
                           .pgn = static_cast<uint32_t>(pgn & 0x3FFFF),
                           .priority = static_cast<uint8_t>(priority & 0b111)
 
-              }
+            }
         {
         }
     };
@@ -524,7 +524,9 @@ public:
         last_message = msg;
         return true;
     }
-    void RegisterRXMessage(ICANRXMessage &msg __attribute__((unused))) { /* rx_messages_.push_back(&msg); */ }
+    void RegisterRXMessage(ICANRXMessage &msg __attribute__((unused)))
+    { /* rx_messages_.push_back(&msg); */
+    }
     void Tick() {}
 
     CANMessage last_message{0, 8, std::array<uint8_t, 8>{0}};
@@ -766,7 +768,7 @@ public:
                             ITypedCANSignal<MultiplexorType> &multiplexor,
                             Ts &...signal_groups)
         : MultiplexedCANTXMessage(
-              can_interface, id, false, length, period, multiplexor_values_to_transmit, multiplexor, signal_groups...)
+            can_interface, id, false, length, period, multiplexor_values_to_transmit, multiplexor, signal_groups...)
     {
     }
 
@@ -1185,7 +1187,7 @@ public:
                             ITypedCANSignal<MultiplexorType> &multiplexor,
                             Ts &...signal_groups)
         : MultiplexedCANRXMessage{
-              can_interface, id, []() { return millis(); }, callback_function, multiplexor, signal_groups...}
+            can_interface, id, []() { return millis(); }, callback_function, multiplexor, signal_groups...}
     {
     }
 
@@ -1228,7 +1230,7 @@ public:
             MultiplexorType multiplexor_value = *multiplexor_;
             if (static_cast<uint64_t>(multiplexor_value)
                     == static_cast<uint64_t>(signal_groups_.at(i)->multiplexor_value_)
-                && i != always_active_signal_group_index_)
+                && !(has_always_active_signal_group_ && i == always_active_signal_group_index_))
             {
                 multiplexor_index = i;
                 break;
@@ -1267,7 +1269,7 @@ private:
     ITypedCANSignal<MultiplexorType> *multiplexor_;
     std::array<IMultiplexedSignalGroup *, num_groups> signal_groups_;
     bool has_always_active_signal_group_{false};
-    uint64_t always_active_signal_group_index_{0};
+    uint64_t always_active_signal_group_index_{0xFFFFFFFFull};
 
     uint64_t multiplexor_index{0};
 

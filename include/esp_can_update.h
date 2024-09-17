@@ -17,21 +17,24 @@ public:
     {
         fw_version_ = kFirmwareVersion;
         update_data_message_.SetMask(0x7FF);
-        timer_group_.AddTimer(100, [this]() {
-            if (update_data_message_.GetTimeSinceLastReceive() >= kUpdateTimeout)
-            {
-                update_started_ = false;
-                received_md5_ = false;
-                received_len_ = false;
-                written_ = false;
-                received_md5_arr_.at(0) = false;
-                received_md5_arr_.at(1) = false;
-                received_md5_arr_.at(2) = false;
-                received_md5_arr_.at(3) = false;
-                update_block_idx_ = 0;
-                Update.abort();
-            }
-        });
+        timer_group_.AddTimer(100,
+                              [this]()
+                              {
+                                  if (update_data_message_.GetTimeSinceLastReceive() >= kUpdateTimeout
+                                      && update_info_message_.GetTimeSinceLastReceive() >= kUpdateTimeout)
+                                  {
+                                      update_started_ = false;
+                                      received_md5_ = false;
+                                      received_len_ = false;
+                                      written_ = false;
+                                      received_md5_arr_.at(0) = false;
+                                      received_md5_arr_.at(1) = false;
+                                      received_md5_arr_.at(2) = false;
+                                      received_md5_arr_.at(3) = false;
+                                      update_block_idx_ = 0;
+                                      Update.abort();
+                                  }
+                              });
     }
 
 private:
@@ -88,7 +91,8 @@ private:
     MultiplexedCANRXMessage<2, MessageType> update_info_message_{
         can_interface_,
         kUpdateId + 1,
-        [this]() {
+        [this]()
+        {
             if (message_type_ == MessageType::kMd5)
             {
                 received_md5_arr_.at(static_cast<uint8_t>(update_md5_idx_)) = true;
@@ -101,19 +105,20 @@ private:
             }
             else if (!update_started_ && message_type_ == MessageType::kUpdateStart)
             {
+                sprintf(md5_cstr_,
+                        "%08x%08x%08x%08x",
+                        __bswap32(md5_arr_.at(0)),
+                        __bswap32(md5_arr_.at(1)),
+                        __bswap32(md5_arr_.at(2)),
+                        __bswap32(md5_arr_.at(3)));
+                Serial.printf("MD5: %s\n", md5_cstr_);
+                Serial.printf("Length: %u\n", static_cast<uint32_t>(update_length_));
                 if (!Update.begin(update_length_))
                 {
                     Update.printError(Serial);
                 }
                 else
                 {
-                    sprintf(md5_cstr_,
-                            "%08x%08x%08x%08x",
-                            __bswap32(md5_arr_.at(0)),
-                            __bswap32(md5_arr_.at(1)),
-                            __bswap32(md5_arr_.at(2)),
-                            __bswap32(md5_arr_.at(3)));
-                    Serial.printf("%s\n", md5_cstr_);
                     Update.setMD5(md5_cstr_);
                     update_block_idx_ = 0;
                     received_len_ = true;
@@ -129,7 +134,8 @@ private:
 
     CANRXMessage<2> update_data_message_{can_interface_,
                                          kUpdateId,
-                                         [this]() {
+                                         [this]()
+                                         {
                                              uint64_t data = update_data_;
                                              uint32_t index = ((update_data_message_.GetID() & 0x1FFFF800/*18 bits of CAN extended ID, not including standard ID*/) >> 3) + data_block_index_low_;
                                              if (update_started_ && static_cast<uint32_t>(update_block_idx_) == index)
