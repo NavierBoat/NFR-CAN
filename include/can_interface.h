@@ -333,7 +333,9 @@ public:
     void InternalEncodeSignal(uint64_t *buffer)
     {
         SignalType signal = this->signal_;
-        if (!signed_raw && signal < CANTemplateGetFloat(offset))
+        if (!signed_raw
+            && (CANTemplateGetFloat(factor) < 0.0f ? signal > CANTemplateGetFloat(offset)
+                                                   : signal < CANTemplateGetFloat(offset)))
         {
             signal = static_cast<SignalType>(CANTemplateGetFloat(offset));
         }
