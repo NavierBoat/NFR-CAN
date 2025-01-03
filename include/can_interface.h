@@ -232,9 +232,15 @@ template class ITypedCANSignal<int16_t>;
 template class ITypedCANSignal<int32_t>;
 template class ITypedCANSignal<float>;
 
-static constexpr int kCANTemplateFloatDenominator{1 << 16};  // 2^16
-constexpr int CANTemplateConvertFloat(float value) { return static_cast<int>(value * kCANTemplateFloatDenominator); }
-constexpr float CANTemplateGetFloat(int value) { return static_cast<float>(value) / kCANTemplateFloatDenominator; }
+static constexpr int64_t kCANTemplateFloatDenominator{static_cast<int64_t>(1) << 32};  // 2^32
+constexpr int64_t CANTemplateConvertFloat(double value)
+{
+    return static_cast<int64_t>(value * kCANTemplateFloatDenominator);
+}
+constexpr double CANTemplateGetFloat(int64_t value)
+{
+    return static_cast<double>(value) / kCANTemplateFloatDenominator;
+}
 
 template <bool signed_raw>
 struct GetCANRawType;
@@ -269,8 +275,8 @@ struct GetCANRawType<false>
 template <typename SignalType,
           uint8_t input_position,
           uint8_t length,
-          int factor,
-          int offset,
+          int64_t factor,
+          int64_t offset,
           bool signed_raw = false,
           ICANSignal::ByteOrder byte_order = ICANSignal::ByteOrder::kLittleEndian,
           BigEndianPositionType position_type = BigEndianPositionType::kDbc,
