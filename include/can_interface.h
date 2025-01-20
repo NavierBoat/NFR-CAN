@@ -345,8 +345,8 @@ public:
         {
             signal = static_cast<SignalType>(CANTemplateGetFloat(offset));
         }
-        underlying_type signal_raw =
-            static_cast<underlying_type>(((signal - CANTemplateGetFloat(offset)) / CANTemplateGetFloat(factor)));
+        underlying_type signal_raw = static_cast<underlying_type>(
+            std::round((signal - CANTemplateGetFloat(offset)) / CANTemplateGetFloat(factor)));
         signal_raw = signal_raw < kMinRaw ? kMinRaw : signal_raw;
         signal_raw = signal_raw > kMaxRaw ? kMaxRaw : signal_raw;
         if (byte_order == ICANSignal::ByteOrder::kLittleEndian)
