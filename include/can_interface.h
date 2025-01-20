@@ -7,6 +7,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <functional>
 #include <vector>
 
@@ -345,8 +346,8 @@ public:
         {
             signal = static_cast<SignalType>(CANTemplateGetFloat(offset));
         }
-        underlying_type signal_raw =
-            static_cast<underlying_type>(((signal - CANTemplateGetFloat(offset)) / CANTemplateGetFloat(factor)));
+        underlying_type signal_raw = static_cast<underlying_type>(
+            std::round((static_cast<float>(signal) - CANTemplateGetFloat(offset)) / CANTemplateGetFloat(factor)));
         signal_raw = signal_raw < kMinRaw ? kMinRaw : signal_raw;
         signal_raw = signal_raw > kMaxRaw ? kMaxRaw : signal_raw;
         if (byte_order == ICANSignal::ByteOrder::kLittleEndian)
