@@ -138,7 +138,7 @@ def on_upload(source, target, env):
                 )
                 if received_progress_msg["received_len"]:
                     received_len = True
-                    print("Old firmware version: " + str(received_progress_msg["fw_version"]))
+                    print("Old firmware version: " + hex(received_progress_msg["fw_version"]))
             while msg is not None:
                 msg = can_bus.recv(0.00001)
         tqdm._instances.clear()
@@ -220,7 +220,7 @@ def on_upload(source, target, env):
                 received_progress_msg = db.decode_message(
                     "update_progress_message", msg.data
                 )
-                print("New firmware version: " + str(received_progress_msg["fw_version"]))
+                print("New firmware version: " + hex(received_progress_msg["fw_version"]))
             else:
                 msg = can_bus.recv(1 / 3817)
 
