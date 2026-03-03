@@ -17,6 +17,9 @@ public:
     {
         fw_version_ = kFirmwareVersion;
         update_data_message_.SetMask(0x7FF);
+        Update.begin(0, -1);  // initialize Update to set private variables, will be properly started when update info
+                              // message is received
+        Update.abort();  // abort the update so that it can be properly started when update info message is received
         timer_group_.AddTimer(100,
                               [this]()
                               {
