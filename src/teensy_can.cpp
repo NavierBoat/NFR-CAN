@@ -1,4 +1,4 @@
-#if defined(ARDUINO_TEENSY40) || defined(ARDUINO_TEENSY41)
+#if defined(ARDUINO_TEENSY40) || defined(ARDUINO_TEENSY41) || defined(ARDUINO_TEENSY36)
 #include "teensy_can.h"
 
 template <uint8_t bus_num>
@@ -6,7 +6,9 @@ std::vector<ICANRXMessage *> TeensyCAN<bus_num>::rx_messages_{};
 
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_256> can_bus_1;
 FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_256> can_bus_2;
+#ifdef ARDUINO_TEENSY41
 FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_256> can_bus_3;
+#endif
 
 template <uint8_t bus_num>
 void TeensyCAN<bus_num>::Initialize(BaudRate baud)
@@ -92,7 +94,8 @@ bool TeensyCAN<bus_num>::SendMessage(CANMessage &msg)
 }
 
 template <uint8_t bus_num>
-_MB_ptr TeensyCAN<bus_num>::ProcessMessage = [](const CAN_message_t &msg) {
+_MB_ptr TeensyCAN<bus_num>::ProcessMessage = [](const CAN_message_t &msg)
+{
     std::array<uint8_t, 8> msg_data{};
     memcpy(msg_data.data(), msg.buf, 8);
     CANMessage received_message{static_cast<uint32_t>(msg.id), msg.len, msg_data};

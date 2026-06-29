@@ -6,7 +6,7 @@
 
 #include "can_interface.h"
 
-#ifdef ARDUINO_TEENSY40
+#if defined(ARDUINO_TEENSY40) or defined(ARDUINO_TEENSY36)
 #define MAX_BUS_NUM 2
 #elif defined(ARDUINO_TEENSY41)
 #define MAX_BUS_NUM 3
